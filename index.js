@@ -89,6 +89,7 @@ const vipRoutes = require('./routes/web/webvipRoutes');
 const webaiRoutes = require('./routes/web/webaiRoutes');
 const invitationCodeRoutes = require('./routes/invitationCodeRoutes');
 const webvideoRoutes = require('./routes/web/webvideoRoutes');
+const webdocumentRoutes = require('./routes/web/webdocumentRoutes');
 const testGptRoutes = require('./routes/web/testGptRoutes');
 const usersviewRoutes = require('./routes/usersviewRoutes');
 const userStatisticsRoutes = require('./routes/userStatisticsRoutes');
@@ -126,6 +127,7 @@ app.use('/api/web/vip', vipRoutes);
 app.use('/api/web/ai', webaiRoutes);
 app.use('/api/invitation-code', invitationCodeRoutes);
 app.use('/api/web/videos', webvideoRoutes);
+app.use('/api/web/documents', webdocumentRoutes);
 app.use('/api/web/test-gpt', testGptRoutes);
 
 
