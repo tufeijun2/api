@@ -4,6 +4,8 @@ const { supabase, select, insert, Web_Trader_UUID } = require('../../config/supa
 const { query } = require('../../config/db');
 const { getUserFromSession } = require('../../middleware/auth');
 const { get_real_time_price, get_India_price } = require('../../config/common');
+const { generateStockAnalysis, generateInvestmentSummary } = require('../../utils/gptService');
+// // const yfinance = require('yahoo-finance2').default; // 暂时注释掉，使用get_real_time_price替代 // 暂时注释掉，使用get_real_time_price替代
 // 处理错误的辅助函数
 const handleError = (res, error, message) => {
   console.error(message + ':', error);
@@ -100,6 +102,27 @@ function getRandomSector(symbol) {
     return sectors[Math.floor(Math.random() * sectors.length)];
 }
 
+// 生成随机浮点数
+function getRandomFloat(min, max) {
+    return Math.random() * (max - min) + min;
+}
+
+// 生成随机整数
+function getRandomInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+// 根据股票代码获取行业（模拟）
+function getRandomSector(symbol) {
+    const sectors = Object.keys(stockPools);
+    for (const [sector, symbols] of Object.entries(stockPools)) {
+        if (symbols.includes(symbol)) {
+            return sector;
+        }
+    }
+    return sectors[Math.floor(Math.random() * sectors.length)];
+}
+
 // 计算AI评分
 function calculateAiScore(stockData, style, risk, timeHorizon) {
     // 基础分数
@@ -122,6 +145,264 @@ function calculateAiScore(stockData, style, risk, timeHorizon) {
     return Math.min(100, Math.max(0, baseScore));
 }
 
+// 辅助函数：计算建议仓位
+function calculateSuggestedPosition(score, risk, investmentAmount) {
+    let basePosition = 0;
+    
+    // 基于评分计算基础仓位
+    if (score >= 80) {
+        basePosition = 20;
+    } else if (score >= 70) {
+        basePosition = 15;
+    } else if (score >= 60) {
+        basePosition = 10;
+    } else {
+        basePosition = 5;
+    }
+    
+    // 基于风险等级调整
+    if (risk === 'high') {
+        basePosition = Math.min(basePosition, 10);
+    } else if (risk === 'low') {
+        basePosition = Math.min(basePosition, 15);
+    }
+    
+    return basePosition;
+}
+
+// 辅助函数：获取止损百分比
+function getStopLossPercentage(risk) {
+    switch (risk) {
+        case 'high': return 0.15; // 15%
+        case 'medium': return 0.10; // 10%
+        case 'low': return 0.05; // 5%
+        default: return 0.10;
+    }
+}
+
+// 辅助函数：获取建议操作
+function getRecommendedAction(score) {
+    if (score >= 75) return 'Buy';
+    if (score >= 60) return 'Hold';
+    if (score >= 40) return 'Watch';
+    return 'Avoid';
+}
+
+// 辅助函数：获取持有周期
+function getHoldingPeriod(timeHorizon) {
+    switch (timeHorizon) {
+        case 'short': return '1-3 months';
+        case 'medium': return '3-12 months';
+        case 'long': return '1-3 years';
+        default: return '3-6 months';
+    }
+}
+
+// 辅助函数：获取主营业务描述
+function getMainBusinessDescription(symbol, sector) {
+    const businessDescriptions = {
+        'AAPL': 'Consumer electronics, software, and services including iPhone, iPad, Mac, and Apple Services',
+        'MSFT': 'Cloud computing, productivity software, and AI services including Azure and Office 365',
+        'GOOGL': 'Search engine, advertising, cloud computing, and AI technologies',
+        'NVDA': 'Graphics processing units (GPUs) and AI computing platforms',
+        'TSLA': 'Electric vehicles, energy storage, and solar panel manufacturing',
+        'META': 'Social media platforms, virtual reality, and digital advertising',
+        'AMZN': 'E-commerce, cloud computing (AWS), and digital streaming services',
+        'JPM': 'Investment banking, commercial banking, and asset management',
+        'JNJ': 'Pharmaceuticals, medical devices, and consumer health products',
+        'XOM': 'Oil and gas exploration, production, and refining'
+    };
+    
+    return businessDescriptions[symbol] || `${sector} industry leader with diversified business operations`;
+}
+
+// 辅助函数：获取财务表现描述
+function getFinancialPerformanceDescription(stockData) {
+    const peRatio = parseFloat(stockData.pe_ratio);
+    const changePercent = parseFloat(stockData.change_percent);
+    
+    let performance = '';
+    
+    if (peRatio > 0 && peRatio < 20) {
+        performance += 'Attractive valuation with reasonable P/E ratio. ';
+    } else if (peRatio > 20 && peRatio < 30) {
+        performance += 'Moderate valuation in line with market expectations. ';
+    } else if (peRatio > 30) {
+        performance += 'Higher valuation requiring strong growth justification. ';
+    }
+    
+    if (changePercent > 10) {
+        performance += 'Strong recent performance with significant upside momentum.';
+    } else if (changePercent > 0) {
+        performance += 'Positive recent performance with steady growth.';
+    } else if (changePercent > -10) {
+        performance += 'Mixed recent performance with some volatility.';
+    } else {
+        performance += 'Challenging recent performance requiring careful evaluation.';
+    }
+    
+    return performance;
+}
+
+// 辅助函数：获取竞争优势
+function getCompetitiveAdvantages(symbol, sector) {
+    const advantages = {
+        'AAPL': 'Strong brand loyalty, ecosystem lock-in, and premium pricing power',
+        'MSFT': 'Enterprise market dominance, cloud leadership, and AI integration',
+        'GOOGL': 'Search monopoly, data advantage, and AI research leadership',
+        'NVDA': 'GPU market dominance, AI chip leadership, and CUDA ecosystem',
+        'TSLA': 'EV market leadership, battery technology, and autonomous driving',
+        'META': 'Social media network effects, VR/AR innovation, and advertising reach',
+        'AMZN': 'E-commerce scale, AWS cloud leadership, and logistics network',
+        'JPM': 'Investment banking leadership, diversified revenue, and risk management',
+        'JNJ': 'Pharmaceutical pipeline, medical device innovation, and global reach',
+        'XOM': 'Integrated operations, scale advantages, and energy transition investments'
+    };
+    
+    return advantages[symbol] || `Strong market position in ${sector} with competitive advantages`;
+}
+
+// 辅助函数：获取短期风险
+function getShortTermRisks(symbol, risk) {
+    const riskLevel = risk.toLowerCase();
+    let risks = '';
+    
+    if (riskLevel === 'high') {
+        risks = 'High volatility, market sensitivity, and potential for significant price swings';
+    } else if (riskLevel === 'medium') {
+        risks = 'Moderate volatility with some market sensitivity and earnings dependency';
+    } else {
+        risks = 'Lower volatility but still subject to market conditions and sector trends';
+    }
+    
+    return risks;
+}
+
+// 辅助函数：获取长期风险
+function getLongTermRisks(symbol, sector) {
+    const sectorRisks = {
+        'technology': 'Technology disruption, regulatory changes, and competitive pressures',
+        'healthcare': 'Regulatory approval risks, patent expirations, and healthcare policy changes',
+        'finance': 'Interest rate sensitivity, regulatory changes, and economic cycles',
+        'energy': 'Commodity price volatility, environmental regulations, and energy transition',
+        'consumer': 'Consumer spending patterns, economic cycles, and brand competition',
+        'industrial': 'Economic cycles, supply chain disruptions, and capital spending patterns',
+        'utilities': 'Regulatory changes, interest rate sensitivity, and infrastructure investments',
+        'materials': 'Commodity price volatility, economic cycles, and environmental regulations'
+    };
+    
+    return sectorRisks[sector] || 'Industry-specific risks and broader market conditions';
+}
+
+// 生成整体投资策略
+function generateOverallStrategy(recommendations, criteria) {
+    const { investmentAmount, risk, timeHorizon, sector } = criteria;
+    
+    // 计算总建议仓位
+    const totalSuggestedPosition = recommendations.reduce((sum, rec) => {
+        return sum + (rec.investmentAdvice?.suggestedPosition || 0);
+    }, 0);
+    
+    // 生成仓位分配建议
+    const positionAllocation = recommendations.map(rec => {
+        const amount = (investmentAmount * (rec.investmentAdvice?.suggestedPosition || 0) / 100);
+        return `${rec.symbol}: ${rec.investmentAdvice?.suggestedPosition || 0}% ($${amount.toFixed(0)})`;
+    }).join(', ');
+    
+    // 生成风险管理建议
+    const riskManagement = generateRiskManagementAdvice(risk, recommendations);
+    
+    // 生成交易策略
+    const tradingStrategy = generateTradingStrategy(timeHorizon, sector, risk);
+    
+    return {
+        positionAllocation: `Total allocation: ${totalSuggestedPosition}% of portfolio. Individual positions: ${positionAllocation}`,
+        riskManagement: riskManagement,
+        tradingStrategy: tradingStrategy
+    };
+}
+
+// 生成风险管理建议
+function generateRiskManagementAdvice(risk, recommendations) {
+    const riskLevel = risk.toLowerCase();
+    let advice = '';
+    
+    if (riskLevel === 'high') {
+        advice = 'Set strict stop-losses at 15% below entry price. Monitor positions daily and consider reducing exposure during high volatility periods.';
+    } else if (riskLevel === 'medium') {
+        advice = 'Set stop-losses at 10% below entry price. Regular portfolio rebalancing quarterly. Monitor market conditions and adjust positions accordingly.';
+    } else {
+        advice = 'Conservative stop-losses at 5% below entry price. Focus on quality companies with strong fundamentals. Regular portfolio review every 6 months.';
+    }
+    
+    return advice;
+}
+
+// 生成交易策略
+function generateTradingStrategy(timeHorizon, sector, risk) {
+    const horizon = timeHorizon.toLowerCase();
+    let strategy = '';
+    
+    if (horizon === 'short') {
+        strategy = 'Focus on short-term momentum and technical indicators. Monitor earnings announcements and sector news closely. Consider quick profit-taking on 20%+ gains.';
+    } else if (horizon === 'medium') {
+        strategy = 'Balance between fundamental analysis and technical trends. Hold positions through quarterly earnings cycles. Rebalance portfolio every 3-6 months.';
+    } else {
+        strategy = 'Focus on long-term value creation and fundamental analysis. Hold through market cycles. Annual portfolio review and rebalancing.';
+    }
+    
+    return strategy;
+}
+
+// 解析GPT生成的结构化策略
+function parseGPTStrategy(gptResponse) {
+    try {
+        // 如果GPT返回的是结构化文本，尝试解析
+        const lines = gptResponse.split('\n');
+        let positionAllocation = '';
+        let riskManagement = '';
+        let tradingStrategy = '';
+        
+        let currentSection = '';
+        
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            
+            if (trimmedLine.includes('**Position Allocation**')) {
+                currentSection = 'position';
+                continue;
+            } else if (trimmedLine.includes('**Risk Management**')) {
+                currentSection = 'risk';
+                continue;
+            } else if (trimmedLine.includes('**Trading Strategy**')) {
+                currentSection = 'trading';
+                continue;
+            }
+            
+            if (currentSection === 'position' && trimmedLine) {
+                positionAllocation += trimmedLine + ' ';
+            } else if (currentSection === 'risk' && trimmedLine) {
+                riskManagement += trimmedLine + ' ';
+            } else if (currentSection === 'trading' && trimmedLine) {
+                tradingStrategy += trimmedLine + ' ';
+            }
+        }
+        
+        return {
+            positionAllocation: positionAllocation.trim() || 'Portfolio allocation based on risk tolerance and investment preferences.',
+            riskManagement: riskManagement.trim() || 'Implement stop-losses and regular portfolio rebalancing.',
+            tradingStrategy: tradingStrategy.trim() || 'Follow systematic entry and exit strategies based on market conditions.'
+        };
+    } catch (error) {
+        console.error('Error parsing GPT strategy:', error);
+        return {
+            positionAllocation: 'Portfolio allocation based on risk tolerance and investment preferences.',
+            riskManagement: 'Implement stop-losses and regular portfolio rebalancing.',
+            tradingStrategy: 'Follow systematic entry and exit strategies based on market conditions.'
+        };
+    }
+}
+
 // 生成专业分析
 function generateProfessionalAnalysis(stockData, style, score) {
     const currentPrice = parseFloat(stockData.current_price);
@@ -130,40 +411,40 @@ function generateProfessionalAnalysis(stockData, style, score) {
     
     let analysisParts = [];
     
-    // 技术面分析
+    // Technical Analysis
     if (score >= 80) {
-        analysisParts.push('技术面表现强劲，多个指标发出买入信号，短期有上涨潜力。');
+        analysisParts.push('Technical indicators show strong bullish signals with multiple buy signals, indicating short-term upside potential.');
     } else if (score >= 60) {
-        analysisParts.push('技术面整体向好，支撑位稳固，可考虑适度配置。');
+        analysisParts.push('Technical analysis shows overall positive trend with stable support levels, consider moderate allocation.');
     } else {
-        analysisParts.push('技术面信号混杂，建议保持观望或分批建仓。');
+        analysisParts.push('Technical signals are mixed, recommend maintaining caution or phased entry strategy.');
     }
     
-    // 估值分析
+    // Valuation Analysis
     if (peRatio > 0) {
         if (peRatio < 15) {
-            analysisParts.push(`市盈率${peRatio}倍，估值偏低，具备投资价值。`);
+            analysisParts.push(`P/E ratio of ${peRatio} indicates undervalued stock with investment potential.`);
         } else if (peRatio < 25) {
-            analysisParts.push(`市盈率${peRatio}倍，估值合理，符合行业平均水平。`);
+            analysisParts.push(`P/E ratio of ${peRatio} indicates reasonable valuation in line with industry average.`);
         } else {
-            analysisParts.push(`市盈率${peRatio}倍，估值较高，需关注基本面支撑。`);
+            analysisParts.push(`P/E ratio of ${peRatio} indicates higher valuation, monitor fundamental support.`);
         }
     }
     
-    // 风险评估
+    // Risk Assessment
     if (beta < 0.8) {
-        analysisParts.push(`Beta系数${beta}，波动性较低，适合风险偏好保守的投资者。`);
+        analysisParts.push(`Beta coefficient of ${beta} suggests lower volatility, suitable for conservative investors.`);
     } else if (beta < 1.5) {
-        analysisParts.push(`Beta系数${beta}，波动性适中，风险可控。`);
+        analysisParts.push(`Beta coefficient of ${beta} suggests moderate volatility with controllable risk.`);
     } else {
-        analysisParts.push(`Beta系数${beta}，波动性较高，建议控制仓位。`);
+        analysisParts.push(`Beta coefficient of ${beta} suggests higher volatility, recommend controlled position sizing.`);
     }
     
     return analysisParts.join(' ');
 }
 
 // 生成股票推荐
-async function generateStockRecommendations(sector, style, risk, timeHorizon,req) {
+async function generateStockRecommendations(sector, style, risk, timeHorizon, investmentAmount, req) {
     try {
         // 选择股票池
         let selectedSymbols;
@@ -200,8 +481,10 @@ async function generateStockRecommendations(sector, style, risk, timeHorizon,req
                 // 计算AI评分
                 const score = calculateAiScore(stockData, style, risk, timeHorizon);
                 
-                // 生成专业分析
-                const professionalAnalysis = generateProfessionalAnalysis(stockData, style, score);
+                // 使用GPT生成专业分析
+                const criteria = { style, risk, timeHorizon, investmentAmount };
+                const gptAnalysis = await generateStockAnalysis(stockData, 'stock-picker', criteria);
+                const professionalAnalysis = gptAnalysis || generateProfessionalAnalysis(stockData, style, score);
                 
                 // 计算预期收益
                 const currentPrice = parseFloat(stockData.current_price);
@@ -215,13 +498,51 @@ async function generateStockRecommendations(sector, style, risk, timeHorizon,req
                     expectedReturn = ((score - 50) * 0.5 + getRandomFloat(-5, 5)).toFixed(1);
                 }
                 
+                // 计算建议仓位（基于投资金额）
+                const suggestedPosition = calculateSuggestedPosition(score, risk, investmentAmount);
+                
+                // 计算目标价格和止损价格
+                const calculatedTargetPrice = targetPrice > 0 ? targetPrice : currentPrice * (1 + parseFloat(expectedReturn) / 100);
+                const stopLossPrice = currentPrice * (1 - getStopLossPercentage(risk));
+                
                 const recommendation = {
                     symbol: symbol,
+                    companyName: stockData.name,
+                    industry: stockData.sector,
+                    currentPrice: currentPrice,
+                    marketCap: stockData.market_cap,
+                    peRatio: parseFloat(stockData.pe_ratio),
+                    week52Change: stockData.change_percent + '%',
+                    
+                    // 公司基本面
+                    fundamentals: {
+                        mainBusiness: getMainBusinessDescription(symbol, stockData.sector),
+                        financialPerformance: getFinancialPerformanceDescription(stockData),
+                        competitiveAdvantages: getCompetitiveAdvantages(symbol, stockData.sector)
+                    },
+                    
+                    // 投资建议
+                    investmentAdvice: {
+                        recommendedAction: getRecommendedAction(score),
+                        targetPrice: calculatedTargetPrice,
+                        stopLoss: stopLossPrice,
+                        suggestedPosition: suggestedPosition,
+                        holdingPeriod: getHoldingPeriod(timeHorizon)
+                    },
+                    
+                    // 风险评估
+                    riskAssessment: {
+                        shortTermRisks: getShortTermRisks(symbol, risk),
+                        longTermRisks: getLongTermRisks(symbol, stockData.sector),
+                        riskLevel: risk.charAt(0).toUpperCase() + risk.slice(1)
+                    },
+                    
+                    // 保留原有字段用于兼容性
                     name: stockData.name,
                     sector: stockData.sector,
                     score: score,
                     reason: professionalAnalysis,
-                    expectedReturn: Math.max(parseFloat(expectedReturn), -30).toString(), // 限制最大亏损显示
+                    expectedReturn: Math.max(parseFloat(expectedReturn), -30).toString(),
                     riskLevel: risk.charAt(0).toUpperCase() + risk.slice(1),
                     current_price: currentPrice,
                     change_percent: parseFloat(stockData.change_percent),
@@ -291,20 +612,31 @@ router.post('/stock-picker', async (req, res) => {
         const style = data.style || 'balanced';
         const risk = data.risk || 'medium';
         const timeHorizon = data.timeHorizon || 'medium';
+        const investmentAmount = data.investmentAmount || 100000; // 默认10万美元
         
         console.log(`[DEBUG] AI stock picker request: sector=${sector}, style=${style}, risk=${risk}, time_horizon=${timeHorizon}`);
         
         // 生成股票推荐
-        const recommendations = await generateStockRecommendations(sector, style, risk, timeHorizon,req);
+        const recommendations = await generateStockRecommendations(sector, style, risk, timeHorizon, investmentAmount, req);
+        
+        // 使用GPT生成投资摘要和整体策略
+        const criteria = { sector, style, risk, timeHorizon, investmentAmount };
+        const investmentSummary = await generateInvestmentSummary(recommendations, criteria);
+        
+        // 解析GPT生成的结构化策略
+        const overallStrategy = parseGPTStrategy(investmentSummary);
         
         return res.json({
             success: true,
             recommendations: recommendations,
+            investmentSummary: investmentSummary,
+            overallStrategy: overallStrategy,
             criteria: {
                 sector: sector,
                 style: style,
                 risk: risk,
-                timeHorizon: timeHorizon
+                timeHorizon: timeHorizon,
+                investmentAmount: investmentAmount
             }
         });
         
@@ -439,6 +771,7 @@ async function generatePortfolioDiagnosis(symbol, purchasePrice, purchaseDate, p
     try {
         // 获取当前股票数据
         const stockData = await getComprehensiveStockData(symbol);
+        
         if (!stockData) {
             return generateFallbackPortfolioDiagnosis(symbol, purchasePrice, purchaseDate);
         }
@@ -468,14 +801,15 @@ async function generatePortfolioDiagnosis(symbol, purchasePrice, purchaseDate, p
                     'purchaseDate': purchaseDate,
                     'purchaseMarket': purchaseMarket
                 };
+                console.log(portfolioPerformance)
             } catch (error) {
                 console.error(`[WARNING] 持仓计算失败:`, error);
             }
         }
         
-        // 由于是模拟环境，我们直接生成模拟的分析结果
-        // 实际环境中这里应该调用GPT API进行分析
-        const mockAnalysis = generateMockPortfolioAnalysis(symbol, stockData, portfolioPerformance);
+        // 使用GPT生成专业诊断分析
+        const gptAnalysis = await generateStockAnalysis(stockData, 'portfolio-diagnosis', portfolioPerformance);
+        const mockAnalysis = gptAnalysis || generateMockPortfolioAnalysis(symbol, stockData, portfolioPerformance);
         
         // 计算评分
         const overallScore = calculatePortfolioScore(stockData, portfolioPerformance);
@@ -486,7 +820,8 @@ async function generatePortfolioDiagnosis(symbol, purchasePrice, purchaseDate, p
             'overallScore': overallScore,
             'summary': `${symbol} comprehensive analysis score: ${overallScore}/100. ${mockAnalysis.substring(0, 100)}${mockAnalysis.length > 100 ? '...' : ''}`,
             'portfolioPerformance': portfolioPerformance,
-            'sections': parsePortfolioAnalysis(mockAnalysis, overallScore)
+            'sections': parsePortfolioAnalysis(mockAnalysis, overallScore),
+            'gptAnalysis': gptAnalysis // 添加GPT分析结果
         };
         
         console.log(`[DEBUG] Portfolio diagnosis ${symbol}: Score ${overallScore}, Portfolio return ${totalReturn.toFixed(2)}%`);
@@ -669,3 +1004,85 @@ router.get('/apihistory', async (req, res) => {
 });
 
 module.exports = router;
+
+// 添加JavaScript版本的round、float、int函数
+function round(value, decimals = 0) {
+    return Number(value.toFixed(decimals));
+}
+
+function float(value) {
+    return parseFloat(value);
+}
+
+function int(value) {
+    return parseInt(value);
+}
+
+// 创建备用股票数据
+function create_fallback_stock_data(symbol, info = {}) {
+    // 股票名称映射
+    const stock_names = {
+        'AAPL': 'Apple Inc.',
+        'MSFT': 'Microsoft Corp.',
+        'GOOGL': 'Alphabet Inc.',
+        'TSLA': 'Tesla Inc.',
+        'NVDA': 'NVIDIA Corp.',
+        'META': 'Meta Platforms Inc.',
+        'AMZN': 'Amazon.com Inc.',
+        'JNJ': 'Johnson & Johnson',
+        'PFE': 'Pfizer Inc.',
+        'UNH': 'UnitedHealth Group',
+        'MRNA': 'Moderna Inc.',
+        'JPM': 'JPMorgan Chase & Co.',
+        'BAC': 'Bank of America Corp.',
+        'WFC': 'Wells Fargo & Company',
+        'GS': 'Goldman Sachs Group Inc.'
+    };
+    
+    // 行业映射
+    const sector_map = {
+        'AAPL': 'Technology', 'MSFT': 'Technology', 'GOOGL': 'Technology', 'TSLA': 'Technology',
+        'NVDA': 'Technology', 'META': 'Technology', 'AMZN': 'Consumer Discretionary',
+        'JNJ': 'Healthcare', 'PFE': 'Healthcare', 'UNH': 'Healthcare', 'MRNA': 'Healthcare',
+        'JPM': 'Financials', 'BAC': 'Financials', 'WFC': 'Financials', 'GS': 'Financials'
+    };
+    
+    // 模拟合理的股票数据
+    const base_price = getRandomFloat(50, 300);
+    const change_percent = getRandomFloat(-5, 5);
+    const prev_close = base_price / (1 + change_percent/100);
+    
+    console.log(`[DEBUG] 为 ${symbol} 创建备用数据: 价格=${base_price.toFixed(2)}`);
+    
+    const fallback_data = {
+        'symbol': symbol,
+        'name': stock_names[symbol] || `${symbol} Corp.`,
+        'sector': sector_map[symbol] || 'Technology',
+        'industry': 'Software',
+        'current_price': round(base_price, 2),
+        'prev_close': round(prev_close, 2),
+        'change': round(base_price - prev_close, 2),
+        'change_percent': round(change_percent, 2),
+        'market_cap': getRandomInt(10, 2000) * 1000000000,  // 100亿到2万亿
+        'pe_ratio': round(getRandomFloat(15, 35), 1),
+        'forward_pe': round(getRandomFloat(12, 30), 1),
+        'peg_ratio': round(getRandomFloat(0.8, 2.5), 2),
+        'price_to_book': round(getRandomFloat(1.2, 8.0), 2),
+        'debt_to_equity': round(getRandomFloat(0.1, 1.5), 2),
+        'roe': round(getRandomFloat(0.08, 0.25), 3),
+        'dividend_yield': round(getRandomFloat(0, 0.05), 3),
+        'beta': round(getRandomFloat(0.7, 1.8), 2),
+        'ma_5': round(base_price * getRandomFloat(0.98, 1.02), 2),
+        'ma_20': round(base_price * getRandomFloat(0.95, 1.05), 2),
+        'rsi': round(getRandomFloat(30, 70), 1),
+        'volatility': round(getRandomFloat(15, 40), 1),
+        'volume_ratio': round(getRandomFloat(0.5, 3.0), 2),
+        'avg_volume': getRandomInt(1000000, 50000000),
+        'high_52w': round(base_price * getRandomFloat(1.1, 1.5), 2),
+        'low_52w': round(base_price * getRandomFloat(0.6, 0.9), 2),
+        'target_price': round(base_price * getRandomFloat(1.05, 1.25), 2),
+        'recommendation': round(getRandomFloat(1.5, 4.5), 1)
+    };
+    
+    return fallback_data;
+}
