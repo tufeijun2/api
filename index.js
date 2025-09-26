@@ -74,6 +74,7 @@ const documentsRoutes = require('./routes/documentsRoutes');
 const leaderboardTradersRoutes = require('./routes/leaderboardTradersRoutes');
 const likeRecordsRoutes = require('./routes/likeRecordsRoutes');
 const membershipLevelsRoutes = require('./routes/membershipLevelsRoutes');
+const membershipPointsRulesRoutes = require('./routes/membershipPointsRulesRoutes');
 const tradeMarketRoutes = require('./routes/tradeMarketRoutes');
 const trades1Routes = require('./routes/trades1Routes');
 const tradingStrategiesRoutes = require('./routes/tradingStrategiesRoutes');
@@ -89,12 +90,11 @@ const vipRoutes = require('./routes/web/webvipRoutes');
 const webaiRoutes = require('./routes/web/webaiRoutes');
 const invitationCodeRoutes = require('./routes/invitationCodeRoutes');
 const webvideoRoutes = require('./routes/web/webvideoRoutes');
-const webdocumentRoutes = require('./routes/web/webdocumentRoutes');
 const testGptRoutes = require('./routes/web/testGptRoutes');
 const usersviewRoutes = require('./routes/usersviewRoutes');
 const userStatisticsRoutes = require('./routes/userStatisticsRoutes');
 const questionBankRoutes = require('./routes/questionBankRoutes');
-
+const webdocumentRoutes = require('./routes/web/webdocumentRoutes');
 
 // 使用路由
 app.use('/api/users', usersRoutes);
@@ -112,6 +112,7 @@ app.use('/api/documents', documentsRoutes);
 app.use('/api/leaderboard-traders', leaderboardTradersRoutes);
 app.use('/api/like-records', likeRecordsRoutes);
 app.use('/api/membership-levels', membershipLevelsRoutes);
+app.use('/api/membership-points-rules', membershipPointsRulesRoutes);
 app.use('/api/trade-market', tradeMarketRoutes);
 app.use('/api/trades1', trades1Routes);
 app.use('/api/trading-strategies', tradingStrategiesRoutes);
@@ -128,6 +129,7 @@ app.use('/api/web/ai', webaiRoutes);
 app.use('/api/invitation-code', invitationCodeRoutes);
 app.use('/api/web/videos', webvideoRoutes);
 app.use('/api/web/documents', webdocumentRoutes);
+
 app.use('/api/web/test-gpt', testGptRoutes);
 
 

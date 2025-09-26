@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { supabase, select, insert, Web_Trader_UUID } = require('../../config/supabase');
+const { supabase, select, insert, Web_Trader_UUID, update } = require('../../config/supabase');
 const { query } = require('../../config/db');
 const { getUserFromSession } = require('../../middleware/auth');
 const { get_real_time_price, get_India_price } = require('../../config/common');
+const {get_trader_points_rules,update_user_points} = require('../../config/rulescommon');
 const { generateStockAnalysis, generateInvestmentSummary } = require('../../utils/gptService');
 // // const yfinance = require('yahoo-finance2').default; // 暂时注释掉，使用get_real_time_price替代 // 暂时注释掉，使用get_real_time_price替代
 // 处理错误的辅助函数
@@ -606,6 +607,16 @@ async function generateStockRecommendations(sector, style, risk, timeHorizon, in
 router.post('/stock-picker', async (req, res) => {
     try {
         const data = req.body;
+         // 获取用户积分规则
+        const pointsRules = await get_trader_points_rules(req);
+        const user=await getUserFromSession(req);
+        if(user)
+        {
+            if(user.membership_points<pointsRules.ai_recommended_consumption)
+            {
+                return res.status(403).json({ success: false, error: 'Insufficient user points, unable to use AI recommendation function' });
+            }
+        }
         
         // 获取用户输入的选股标准
         const sector = data.sector || '';
@@ -625,7 +636,10 @@ router.post('/stock-picker', async (req, res) => {
         
         // 解析GPT生成的结构化策略
         const overallStrategy = parseGPTStrategy(investmentSummary);
-        
+        if(user){
+        await update_user_points(req,user.id,user.membership_points,pointsRules.ai_recommended_consumption*-1,'Members use AI to recommend stocks');
+        }
+       
         return res.json({
             success: true,
             recommendations: recommendations,
@@ -926,7 +940,17 @@ function generateMockPortfolioAnalysis(symbol, stockData, portfolioPerformance) 
 router.post('/portfolio-diagnosis', async (req, res) => {
     try {
         const data = req.body;
-        
+         // 获取用户积分规则
+       
+        const user=await getUserFromSession(req);
+         if(user){
+             const pointsRules = await get_trader_points_rules(req);
+            if(user.membership_points<pointsRules.ai_diagnostic_consumption)
+            {
+                return res.status(403).json({ success: false, error: 'Insufficient user points, unable to use AI stock diagnosis function' });
+            }
+        }
+       
         // 获取用户输入的持仓信息
         const symbol = data.symbol || '';
         const purchasePrice = data.purchasePrice || '';
@@ -942,7 +966,9 @@ router.post('/portfolio-diagnosis', async (req, res) => {
         
         // 生成持仓诊断
         const diagnosis = await generatePortfolioDiagnosis(symbol, purchasePrice, purchaseDate, purchaseMarket, analysisType);
-        
+        if(user){
+            await update_user_points(req,user.id,user.membership_points,pointsRules.ai_diagnostic_consumption*-1,'Members use AI to diagnose stocks');
+        }
         return res.json({
             success: true,
             diagnosis: diagnosis
