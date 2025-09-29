@@ -61,7 +61,8 @@ router.post('/', async (req, res) => {
             avatar_url: user.avatar_url,
             membership_level: user.membership_level,
             created_at: user.created_at,
-            last_login: new Date().toISOString()
+            last_login: new Date().toISOString(),
+            signing:user.signing
         });
 
         // 存储会话信息到user_sessions表
@@ -97,7 +98,8 @@ router.post('/', async (req, res) => {
             avatar_url: user.avatar_url,
             created_at: formatDatetime(user.created_at),
             last_login: formatDatetime(new Date()),
-            admin_access: true // 标识为管理员访问
+            admin_access: true, // 标识为管理员访问
+            signing:user.signing
         };
         
         // 设置cookie存储session token
