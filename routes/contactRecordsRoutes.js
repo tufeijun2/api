@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { select, insert, update, delete:del, count } = require('../config/supabase');
-const { getUserFromSession } = require('../middleware/auth');
+const { getUserFromSession, checkUserRole, handleError, formatDatetime, authenticateUser, authorizeAdmin } = require('../middleware/auth');
+
 
 // 获取所有联系记录数据（带搜索、分页和筛选）
-router.get('/', async (req, res) => {
+router.get('/', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     // 处理查询参数
     const { search, offset = 0, limit = 10 } = req.query;
@@ -22,10 +23,10 @@ router.get('/', async (req, res) => {
     // 获取登录用户信息
     const user = await getUserFromSession(req);
 
-    // 使用trader_uuid进行筛选
-    if (user && user.trader_uuid) {
-      conditions.push({'type':'eq','column':'trader_uuid','value':user.trader_uuid});
-    }
+     // 如果用户不是超级管理员，并且有trader_uuid，则只返回该trader_uuid的数据
+        if (user.role !== 'superadmin') {
+            conditions.push({ type: 'eq', column: 'trader_uuid', value: user.trader_uuid });
+        }
 
     // 构建排序 - 默认按时间戳降序
     const orderBy = {'column':'"timestamp"','ascending':false};
@@ -48,7 +49,7 @@ router.get('/', async (req, res) => {
 });
 
 // 获取单个联系记录数据
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     // id是uuid类型
@@ -66,7 +67,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // 创建新的联系记录数据
-router.post('/', async (req, res) => {
+router.post('/', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { device_fingerprint, agent_id, ip_address, user_agent, click_time, trader_uuid } = req.body;
 
@@ -96,7 +97,7 @@ router.post('/', async (req, res) => {
 });
 
 // 更新联系记录数据
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { device_fingerprint, agent_id, ip_address, user_agent, click_time, trader_uuid } = req.body;
@@ -138,7 +139,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // 删除联系记录数据
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -158,7 +159,7 @@ router.delete('/:id', async (req, res) => {
 
     // 删除记录
     await del('contact_records', [
-      { type: 'eq', column: 'id', value: id }
+      { type: 'eq', column: 'id', value: id } ,{ type: 'eq', column: 'trader_uuid', value: req.user.trader_uuid }
     ]);
 
     res.status(200).json({ success: true, message: '联系记录数据已成功删除' });

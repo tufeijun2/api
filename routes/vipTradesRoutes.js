@@ -1,16 +1,20 @@
 const express = require('express');
 const router = express.Router();
 const { select, insert, update, delete: del, count } = require('../config/supabase');
-const { getUserFromSession } = require('../middleware/auth');
+const { getUserFromSession, checkUserRole, handleError, formatDatetime, authenticateUser, authorizeAdmin } = require('../middleware/auth');
+
 
 // 获取所有VIP交易数据（带搜索、分页和筛选）
-router.get('/', async (req, res) => {
+router.get('/', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     // 处理查询参数
     const { search, trade_market, offset = 0, limit = 10 } = req.query;
 
     // 构建条件
     const conditions = [];
+    // 加入删除状态筛选
+    conditions.push({ type: 'eq', column: 'isdel', value: false });
+
     if (search) {
       conditions.push({ 'type': 'like', 'column': 'symbol', 'value': search });
     }
@@ -21,9 +25,8 @@ router.get('/', async (req, res) => {
     // 获取登录用户信息
     const user = await getUserFromSession(req);
     
-    // 如果用户不是超级管理员，并且有trader_uuid，则只返回该trader_uuid的数据
-    if (user && user.trader_uuid) {
-      conditions.push({ type: 'eq', column: 'trader_uuid', value: user.trader_uuid });
+   if (user.role !== 'superadmin') {
+            conditions.push({ type: 'eq', column: 'trader_uuid', value: user.trader_uuid });
     }
     
     // 构建排序
@@ -50,7 +53,7 @@ router.get('/', async (req, res) => {
 });
 
 // 获取单个VIP交易数据
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     // id是整数类型
@@ -76,7 +79,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // 创建新的VIP交易数据
-router.post('/', async (req, res) => {
+router.post('/', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { 
       symbol, 
@@ -127,7 +130,7 @@ router.post('/', async (req, res) => {
 });
 
 // 更新VIP交易数据
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { 
@@ -191,7 +194,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // 删除VIP交易数据
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -204,14 +207,14 @@ router.delete('/:id', async (req, res) => {
     // 获取登录用户信息
     const user = await getUserFromSession(req);
     
-    // 检查权限 - 只有管理员或记录所属者可以删除
-    if (user && user.trader_uuid !== existingTrade[0].trader_uuid && user.role !== 'admin') {
-      return res.status(403).json({ success: false, error: '没有权限删除此VIP交易记录' });
+    if (user.role !== 'superadmin') {
+            conditions.push({ type: 'eq', column: 'trader_uuid', value: user.trader_uuid });
     }
     
     // 删除交易记录
-    await del('vip_trades', [
-      { type: 'eq', column: 'id', value: id }
+    await update('vip_trades', { isdel: true }, [
+      { type: 'eq', column: 'id', value: id },
+      { type: 'eq', column: 'trader_uuid', value: user.trader_uuid }
     ]);
     
     res.status(200).json({ success: true, message: 'VIP交易数据已成功删除' });

@@ -3,7 +3,8 @@ const router = express.Router();
 const moment = require('moment');
 const {get_device_fingerprint} = require('../../config/common');
 const { select, insert, update, delete: del, count,Web_Trader_UUID, supabase } = require('../../config/supabase');
-
+const { getUserFromSession } = require('../../middleware/auth');
+const {get_trader_points_rules,update_user_points} = require('../../config/rulescommon');
 // 获取交易员信息数据
 router.get('/trader_profiles', async (req, res) => {
   try {
@@ -11,6 +12,8 @@ router.get('/trader_profiles', async (req, res) => {
       const conditions = [];
       console.log(Web_Trader_UUID)
       conditions.push({ type: 'eq', column: 'trader_uuid', value: Web_Trader_UUID });
+      // 加入删除状态筛选
+      conditions.push({ type: 'eq', column: 'isdel', value: false });
       // const orderBy = {'column':'id','ascending':false};
       const users = await select('trader_profiles', '*', conditions,
           null,
@@ -293,7 +296,12 @@ router.post('/like-trader', async (req, res) => {
   try {
     const Web_Trader_UUID = req.headers['web-trader-uuid'];
    
-    
+     const user=await getUserFromSession(req);
+     if(user)
+     {
+        const pointsRules = await get_trader_points_rules(req);
+        await update_user_points(req,user.id,user.membership_points,pointsRules.likes_points,'Members Use likes');
+     }
     // 检查点赞记录
     const device_fingerprint = get_device_fingerprint(req);
       // 更新leaderboard_traders表中的点赞数
@@ -320,7 +328,12 @@ router.post('/like-leaderboard', async (req, res) => {
   try {
     const Web_Trader_UUID = req.headers['web-trader-uuid'];
     const { id } = req.body;
-    
+    const user=await getUserFromSession(req);
+     if(user)
+     {
+        const pointsRules = await get_trader_points_rules(req);
+        await update_user_points(req,user.id,user.membership_points,pointsRules.likes_points,'Members Use likes');
+     }
     if (!id) {
       return res.status(400).json({
         success: false,

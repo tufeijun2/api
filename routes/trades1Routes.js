@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { select, insert, update,delete:deletedData, count } = require('../config/supabase');
-const { getUserFromSession } = require('../middleware/auth');
+const { getUserFromSession, checkUserRole, handleError, formatDatetime, authenticateUser, authorizeAdmin } = require('../middleware/auth');
+
 
 // 获取所有交易记录数据（带搜索、分页和筛选）
-router.get('/', async (req, res) => {
+router.get('/', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     // 处理查询参数
     const { search, trade_market, offset = 0, limit = 10 } = req.query;
@@ -14,6 +15,7 @@ router.get('/', async (req, res) => {
     if (search) {
       conditions.push({ 'type': 'like', 'column': 'symbol', 'value': search });
     }
+    conditions.push({ type: 'eq', column: 'isdel', value: false });
     if (trade_market !== undefined && trade_market !== "") {
       conditions.push({ 'type': 'eq', 'column': 'trade_market', 'value': trade_market });
     }
@@ -50,7 +52,7 @@ router.get('/', async (req, res) => {
 });
 
 // 获取单个交易记录数据
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     // id是整数类型
@@ -63,9 +65,9 @@ router.get('/:id', async (req, res) => {
     // 获取登录用户信息
     const user = await getUserFromSession(req);
     
-    // 检查权限 - 只有管理员或记录所属者可以查看
-    if (user && user.trader_uuid !== trades[0].trader_uuid && user.role !== 'admin') {
-      return res.status(403).json({ success: false, error: '没有权限查看此交易记录' });
+    // 如果用户不是超级管理员，检查权限
+    if (user && user.role !== 'superadmin' && user.trader_uuid !== trades[0].trader_uuid) {
+      return res.status(403).json({ success: false, error: '没有权限访问此交易记录' });
     }
     
     res.status(200).json({ success: true, data: trades[0] });
@@ -76,7 +78,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // 创建新的交易记录数据
-router.post('/', async (req, res) => {
+router.post('/', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { symbol, entry_date, entry_price, size, exit_date, exit_price, current_price, image_url, trade_market, direction } = req.body;
     
@@ -88,7 +90,12 @@ router.post('/', async (req, res) => {
     // 获取登录用户信息
     const user = await getUserFromSession(req);
     
+    // 获取当前最大ID，避免主键冲突
+    const maxIdResult = await select('trades1', 'id', [], 1, 0, { column: 'id', ascending: false });
+    const nextId = maxIdResult && maxIdResult.length > 0 ? maxIdResult[0].id + 1 : 1;
+    
     const newTrade = await insert('trades1', {
+      id: nextId,
       symbol,
       entry_date,
       entry_price,
@@ -99,7 +106,8 @@ router.post('/', async (req, res) => {
       image_url,
       trade_market,
       direction: direction || 1,
-      trader_uuid: user && user.trader_uuid ? user.trader_uuid : null
+      trader_uuid: user && user.trader_uuid ? user.trader_uuid : null,
+      isdel: false
     });
     
     res.status(201).json({ success: true, data: newTrade });
@@ -110,7 +118,7 @@ router.post('/', async (req, res) => {
 });
 
 // 更新交易记录数据
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { symbol, entry_date, entry_price, size, exit_date, exit_price, current_price, image_url, trade_market, direction } = req.body;
@@ -143,7 +151,8 @@ router.put('/:id', async (req, res) => {
     if (direction !== undefined) updateData.direction = direction;
     
     const updatedTrade = await update('trades1', updateData, [
-      { type: 'eq', column: 'id', value: id }
+      { type: 'eq', column: 'id', value: id },
+       { type: 'eq', column: 'trader_uuid', value: user.trader_uuid }
     ]);
     
     res.status(200).json({ success: true, data: updatedTrade });
@@ -154,27 +163,27 @@ router.put('/:id', async (req, res) => {
 });
 
 // 删除交易记录数据
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    
+     // 获取登录用户信息
+    const user = await getUserFromSession(req);
     // 检查数据是否存在
-    const existingTrade = await select('trades1', '*', [{ 'type': 'eq', 'column': 'id', 'value': id }]);
+    const existingTrade = await select('trades1', '*', [{ 'type': 'eq', 'column': 'id', 'value': id },
+       { type: 'eq', column: 'trader_uuid', value: user.trader_uuid }]);
     if (!existingTrade || existingTrade.length === 0) {
       return res.status(404).json({ success: false, error: '交易记录数据不存在' });
     }
-    
-    // 获取登录用户信息
-    const user = await getUserFromSession(req);
-    
+   
     // 检查权限 - 只有管理员或记录所属者可以删除
     if (user && user.trader_uuid !== existingTrade[0].trader_uuid && user.role !== 'admin') {
       return res.status(403).json({ success: false, error: '没有权限删除此交易记录' });
     }
     
     // 删除交易记录
-    await deletedData('trades1', [
-      { type: 'eq', column: 'id', value: id }
+    await update('trades1', { isdel: true }, [
+      { type: 'eq', column: 'id', value: id },
+       { type: 'eq', column: 'trader_uuid', value: user.trader_uuid }
     ]);
     
     res.status(200).json({ success: true, message: '交易记录数据已成功删除' });

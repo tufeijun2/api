@@ -3,6 +3,7 @@ const router = express.Router();
 const moment = require('moment');
 const { v4: uuidv4 } = require('uuid');
 const {get_device_fingerprint} = require('../../config/common');
+const {get_trader_points_rules,update_user_points} = require('../../config/rulescommon');
 const { select, insert, update, delete: del, count,Web_Trader_UUID } = require('../../config/supabase');
 
 // 用户登录接口
@@ -14,27 +15,28 @@ router.post('/', async (req, res) => {
         if (!username || !password_hash) {
             return res.status(400).json({ success: false, message: 'Username and password cannot be empty' });
         }
-        
-        // 查找用户并验证是否为管理员
-        const users = await select('users', '*', [
+        const where=[
             { type: 'eq', column: 'username', value: username },
             { type: 'eq', column: 'password_hash', value: password_hash },
             
-        ]);
-        if(username!='admin'){
-           users.push({ type: 'eq', column: 'trader_uuid', value: req.headers['web-trader-uuid'] })
+        ]
+         if(username!='admin'){
+           where.push({ type: 'eq', column: 'trader_uuid', value: req.headers['web-trader-uuid'] })
         }
+        // 查找用户并验证是否为管理员
+        const users = await select('users', '*', where);
+       
         console.log(users)
         // 检查用户是否存在且为管理员
         if (!users || users.length === 0) {
-            return res.status(401).json({ success: false, message: 'Admin account or password is incorrect, or the user is not an admin' });
+            return res.status(200).json({ success: false, message: 'Admin account or password is incorrect, or the user is not an admin' });
         }
         
         const user = users[0];
         
         // 检查用户状态
         if (user.status !== 'active') {
-            return res.status(401).json({ success: false, message: 'Admin account is not activated or has been disabled' });
+            return res.status(200).json({ success: false, message: 'Admin account is not activated or has been disabled' });
         }
         
         // 更新最后登录时间和IP
@@ -71,8 +73,19 @@ router.post('/', async (req, res) => {
             ip_address: req.ip,
             user_info_json: userInfoJson
         };
-        
-        await insert('user_sessions', sessionData);
+        const user_sessions = await select('user_sessions', '*', [
+            { type: 'eq', column: 'user_id', value: user.id }
+        ]);
+        console.log(user_sessions)
+        if (user_sessions && user_sessions.length > 0) {
+            console.log('删除旧会话:',user.id);
+            await del('user_sessions', [
+                { type: 'eq', column: 'user_id', value: user.id }
+            ]);
+        }
+       
+            await insert('user_sessions', sessionData);
+       
         
         // 构建返回的管理员信息
         const adminInfo = {
@@ -147,9 +160,13 @@ router.post('/register', async (req, res) => {
             { type: 'eq', column: 'trader_uuid', value: req.headers['web-trader-uuid'] }
         ]);
 
+
          if (!existinginvitationcode || existinginvitationcode.length <= 0) {
             return res.status(400).json({ success: false, message: 'Please contact customer service to obtain the correct invitation code' });
         }
+        
+        // 获取用户积分规则
+        const pointsRules = await get_trader_points_rules(req);
         
         // 准备用户数据
         const now = new Date().toISOString();
@@ -161,12 +178,14 @@ router.post('/register', async (req, res) => {
             phonenumber: phonenumber,
             role: 'user', // 默认普通用户角色
             status: 'active', // 默认激活状态
-          
+            membership_points: 0,
             trader_uuid: req.headers['web-trader-uuid']  // 使用配置中的Web_Trader_UUID
         };
-        
-        // 插入新用户
+         // 插入新用户
         const insertedUser = await insert('users', userData);
+        //赠送用户注册积分
+        await update_user_points(req,insertedUser[0].id,0,pointsRules.register_points,'New Member registration');
+       
         
         if (!insertedUser || insertedUser.length === 0) {
             return res.status(500).json({ success: false, message: 'Registration failed, please try again' });

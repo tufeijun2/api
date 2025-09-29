@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { select, insert, update, delete: del, count } = require('../config/supabase');
-const { getUserFromSession } = require('../middleware/auth');
+const { getUserFromSession, checkUserRole, handleError, formatDatetime, authenticateUser, authorizeAdmin } = require('../middleware/auth');
+
 
 // 获取所有访问统计数据（带搜索、分页和筛选）
-router.get('/', async (req, res) => {
+router.get('/', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     // 处理查询参数
     const { date, offset = 0, limit = 10 } = req.query;
@@ -18,9 +19,8 @@ router.get('/', async (req, res) => {
     // 获取登录用户信息
     const user = await getUserFromSession(req);
     
-    // 如果登录用户的trader_uuid不为空，则添加筛选条件
-    if (user && user.trader_uuid) {
-      conditions.push({ type: 'eq', column: 'trader_uuid', value: user.trader_uuid });
+    if (user.role !== 'superadmin') {
+            conditions.push({ type: 'eq', column: 'trader_uuid', value: user.trader_uuid });
     }
     
     // 构建排序
@@ -47,7 +47,7 @@ router.get('/', async (req, res) => {
 });
 
 // 获取单个访问统计数据
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const visitStats = await select('visit_stats', '*', [{ 'type': 'eq', 'column': 'id', 'value': id }]);
@@ -72,7 +72,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // 创建新的访问统计数据
-router.post('/', async (req, res) => {
+router.post('/', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { date, total_visits, unique_visitors, page_views, avg_time_on_site, bounce_rate, created_at, updated_at } = req.body;
     
@@ -112,7 +112,7 @@ router.post('/', async (req, res) => {
 });
 
 // 更新访问统计数据
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { date, total_visits, unique_visitors, page_views, avg_time_on_site, bounce_rate, updated_at } = req.body;
@@ -163,7 +163,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // 删除访问统计数据
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -183,7 +183,7 @@ router.delete('/:id', async (req, res) => {
     
     // 删除访问统计数据
     await del('visit_stats', [
-      { type: 'eq', column: 'id', value: id }
+      { type: 'eq', column: 'id', value: id } ,{ type: 'eq', column: 'trader_uuid', value: req.user.trader_uuid }
     ]);
     
     res.status(200).json({ success: true, message: '访问统计数据已成功删除' });

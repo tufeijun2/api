@@ -614,7 +614,7 @@ router.post('/stock-picker', async (req, res) => {
         {
             if(user.membership_points<pointsRules.ai_recommended_consumption)
             {
-                return res.status(403).json({ success: false, error: 'Insufficient user points, unable to use AI recommendation function' });
+                return res.status(200).json({ success: false, error: 'Insufficient user points, unable to use AI recommendation function' });
             }
         }
         
@@ -947,7 +947,7 @@ router.post('/portfolio-diagnosis', async (req, res) => {
              const pointsRules = await get_trader_points_rules(req);
             if(user.membership_points<pointsRules.ai_diagnostic_consumption)
             {
-                return res.status(403).json({ success: false, error: 'Insufficient user points, unable to use AI stock diagnosis function' });
+                return res.status(200).json({ success: false, error: 'Insufficient user points, unable to use AI stock diagnosis function' });
             }
         }
        

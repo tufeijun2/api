@@ -1,82 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { select, insert, update, delete: deleteData, count } = require('../config/supabase');
-const { getUserFromSession } = require('../middleware/auth');
+const { getUserFromSession, checkUserRole, handleError, formatDatetime, authenticateUser, authorizeAdmin } = require('../middleware/auth');
 
-// 验证用户是否已登录的中间件
-const authenticateUser = async (req, res, next) => {
-  try {
-    // 从cookie或请求头中获取session token
-    const sessionToken = req.cookies?.session_token || req.headers['session-token'];
-    
-    if (!sessionToken) {
-      return res.status(401).json({ success: false, message: '用户未登录' });
-    }
-    
-    // 查询有效的会话
-    const now = new Date().toISOString();
-    const sessions = await select('user_sessions', '*', [
-      { type: 'eq', column: 'session_token', value: sessionToken },
-      { type: 'gt', column: 'expires_at', value: now }
-    ]);
-    
-    if (!sessions || sessions.length === 0) {
-      // 会话无效或已过期，清除cookie
-      res.clearCookie('session_token', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        path: '/'
-      });
-      return res.status(401).json({ success: false, message: '会话已过期，请重新登录' });
-    }
-    
-    const session = sessions[0];
-    
-    // 查询用户信息
-    const users = await select('users', '*', [
-      { type: 'eq', column: 'id', value: session.user_id }
-    ]);
-    
-    if (!users || users.length === 0) {
-      return res.status(404).json({ success: false, message: '用户不存在' });
-    }
-    
-    // 将用户信息添加到请求对象中
-    req.user = users[0];
-    
-    next();
-  } catch (error) {
-    console.error('验证用户登录状态失败:', error);
-    res.status(500).json({ success: false, message: '验证用户登录状态失败' });
-  }
-};
-
-// 验证用户是否为管理员的中间件
-const authorizeAdmin = (req, res, next) => {
-  // 确保authenticateUser中间件已在前面执行
-  if (!req.user) {
-    return res.status(401).json({ success: false, message: '用户未登录' });
-  }
-  
-  // 检查用户角色是否为admin
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ success: false, message: '权限不足，需要管理员权限' });
-  }
-  
-  next();
-};
-
-// 格式化日期时间
-const formatDatetime = (datetime) => {
-  if (!datetime) return null;
-  return new Date(datetime).toISOString().replace('Z', '').replace('T', ' ');
-};
-
-// 错误处理
-const handleError = (res, error, message = '操作失败') => {
-  console.error(message, error);
-  res.status(500).json({ success: false, message, error: error.message });
-};
 
 // 获取所有交易者档案 - 需要登录和管理员权限
 router.get('/', authenticateUser, authorizeAdmin, async (req, res) => {
@@ -85,16 +11,16 @@ router.get('/', authenticateUser, authorizeAdmin, async (req, res) => {
         
         const conditions = [];
         if (search) {
-            conditions.push({ type: 'ilike', column: 'trader_name', value: `%${search}%` });
+            conditions.push({ type: 'like', column: 'trader_name', value: `%${search}%` });
         }
         if (trader_name) {
-            conditions.push({ type: 'ilike', column: 'trader_name', value: `%${trader_name}%` });
+            conditions.push({ type: 'like', column: 'trader_name', value: `%${trader_name}%` });
         }
+         conditions.push({ type: 'eq', column: 'isdel', value: false });
         // 获取登录用户信息
         const user = await getUserFromSession(req);
         
-        // 如果用户不是超级管理员，并且有trader_uuid，则只返回该trader_uuid的数据
-        if (user && user.trader_uuid) {
+        if (user.role !== 'superadmin') {
             conditions.push({ type: 'eq', column: 'trader_uuid', value: user.trader_uuid });
         }
         
@@ -175,7 +101,7 @@ router.post('/', authenticateUser, authorizeAdmin, async (req, res) => {
             years_of_experience, total_trades = 0, win_rate,
             trader_uuid, website_title, home_top_title,
             use_dialog = 1, allow_close_dialog = 0, agreement,
-            members_count = 0, likes_count = 0
+            members_count = 0, likes_count = 0,home_top_title_link
         } = req.body;
         
         // 验证输入
@@ -197,14 +123,15 @@ router.post('/', authenticateUser, authorizeAdmin, async (req, res) => {
             years_of_experience: years_of_experience !== undefined ? parseInt(years_of_experience) : null,
             total_trades: parseInt(total_trades) || 0,
             win_rate: win_rate !== undefined ? parseFloat(win_rate) : null,
-            trader_uuid: profileTraderUuid || null,
+
             website_title,
             home_top_title,
             use_dialog: parseInt(use_dialog) || 1,
             allow_close_dialog: parseInt(allow_close_dialog) || 0,
             agreement,
             members_count: parseInt(members_count) || 0,
-            likes_count: parseInt(likes_count) || 0
+            likes_count: parseInt(likes_count) || 0,
+            home_top_title_link:home_top_title_link
         };
         
         const insertedProfiles = await insert('trader_profiles', newProfile);
@@ -224,7 +151,7 @@ router.put('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
             years_of_experience, total_trades, win_rate,
             trader_uuid, website_title, home_top_title,
             use_dialog, allow_close_dialog, agreement,
-            members_count, likes_count
+            members_count, likes_count,home_top_title_link
         } = req.body;
         
         // 检查交易者档案是否存在
@@ -254,7 +181,6 @@ router.put('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
         if (years_of_experience !== undefined) updateData.years_of_experience = parseInt(years_of_experience);
         if (total_trades !== undefined) updateData.total_trades = parseInt(total_trades) || 0;
         if (win_rate !== undefined) updateData.win_rate = parseFloat(win_rate);
-        if (trader_uuid !== undefined && user.role === 'superadmin') updateData.trader_uuid = trader_uuid; // 只有超级管理员可以修改trader_uuid
         if (website_title !== undefined) updateData.website_title = website_title;
         if (home_top_title !== undefined) updateData.home_top_title = home_top_title;
         if (use_dialog !== undefined) updateData.use_dialog = parseInt(use_dialog) || 1;
@@ -262,6 +188,7 @@ router.put('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
         if (agreement !== undefined) updateData.agreement = agreement;
         if (members_count !== undefined) updateData.members_count = parseInt(members_count) || 0;
         if (likes_count !== undefined) updateData.likes_count = parseInt(likes_count) || 0;
+        if (home_top_title_link !== undefined) updateData.home_top_title_link = home_top_title_link;
         
         // 更新交易者档案
         const updatedProfiles = await update('trader_profiles', updateData, [
@@ -293,12 +220,12 @@ router.delete('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
         const existingProfile = existingProfiles[0];
         
         // 检查用户是否有权限删除该数据
-        if (user.trader_uuid && user.role !== 'superadmin' && existingProfile.trader_uuid !== user.trader_uuid) {
+        if (user.trader_uuid && user.role !== 'superadmin') {
             return res.status(403).json({ success: false, message: '权限不足，无法删除该数据' });
         }
         
         // 删除交易者档案
-        await deleteData('trader_profiles', [
+        await update('trader_profiles', { isdel: true }, [
             { type: 'eq', column: 'id', value: id }
         ]);
         

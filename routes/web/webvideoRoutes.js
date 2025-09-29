@@ -19,7 +19,7 @@ router.get('/videolist', async (req, res) => {
       conditions.push({ type: 'eq', column: 'trader_uuid', value: Web_Trader_UUID });
       // 获取登录用户信息
         const user = await getUserFromSession(req);
-      if(!user)
+      if(!user || !user.signing)
       {
          conditions.push({ type: 'eq', column: 'ispublic', value: 1 });
       }

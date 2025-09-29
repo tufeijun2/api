@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { select, insert, update, delete: del, count } = require('../config/supabase');
-const { getUserFromSession } = require('../middleware/auth');
+const { getUserFromSession, checkUserRole, handleError, formatDatetime, authenticateUser, authorizeAdmin } = require('../middleware/auth');
+
 
 // 获取所有每日点赞数据（带搜索、分页和筛选）
-router.get('/', async (req, res) => {
+router.get('/', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     // 处理查询参数
     const { date, offset = 0, limit = 10 } = req.query;
@@ -18,10 +19,10 @@ router.get('/', async (req, res) => {
     // 获取登录用户信息
     const user = await getUserFromSession(req);
     
-    // 使用user_id进行筛选
-    if (user && user.user_id) {
-      conditions.push({ type: 'eq', column: 'user_id', value: user.user_id });
-    }
+    // 如果用户不是超级管理员，并且有trader_uuid，则只返回该trader_uuid的数据
+        if (user.role !== 'superadmin') {
+            conditions.push({ type: 'eq', column: 'trader_uuid', value: user.trader_uuid });
+        }
     
     // 构建排序
     const orderBy = { 'column': 'date', 'ascending': false };
@@ -47,7 +48,7 @@ router.get('/', async (req, res) => {
 });
 
 // 获取单个每日点赞数据
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     // id是uuid类型，使用对象条件
@@ -73,7 +74,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // 创建新的每日点赞数据
-router.post('/', async (req, res) => {
+router.post('/', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { date, total_likes } = req.body;
     
@@ -105,7 +106,7 @@ router.post('/', async (req, res) => {
 });
 
 // 更新每日点赞数据
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { date, total_likes } = req.body;
@@ -149,7 +150,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // 删除每日点赞数据
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -161,15 +162,11 @@ router.delete('/:id', async (req, res) => {
     
     // 获取登录用户信息
     const user = await getUserFromSession(req);
-    
-    // 检查权限 - 只有管理员或记录所属者可以删除
-    if (user && user.user_id !== existingRecord[0].user_id && user.role !== 'admin') {
-      return res.status(403).json({ success: false, error: '没有权限删除此每日点赞数据' });
-    }
+  
     
     // 删除每日点赞数据
     await del('daily_likes', [
-      { type: 'eq', column: 'id', value: id }
+      { type: 'eq', column: 'id', value: id } ,{ type: 'eq', column: 'trader_uuid', value: req.user.trader_uuid }
     ]);
     
     res.status(200).json({ success: true, message: '每日点赞数据已成功删除' });

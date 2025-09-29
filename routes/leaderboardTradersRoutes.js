@@ -1,29 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { select, insert, update, delete: del, count } = require('../config/supabase');
-const { getUserFromSession } = require('../middleware/auth');
+const { getUserFromSession, checkUserRole, handleError, formatDatetime, authenticateUser, authorizeAdmin } = require('../middleware/auth');
 
-// 认证中间件
-const authenticateUser = async (req, res, next) => {
-  try {
-    const user = await getUserFromSession(req);
-    if (!user) {
-      return res.status(401).json({ success: false, message: '未授权访问，请先登录' });
-    }
-    req.user = user;
-    next();
-  } catch (error) {
-    res.status(500).json({ success: false, message: '认证失败' });
-  }
-};
 
-// 管理员授权中间件
-const authorizeAdmin = async (req, res, next) => {
-  if (!req.user || req.user.role !== 'admin') {
-    return res.status(403).json({ success: false, message: '需要管理员权限' });
-  }
-  next();
-};
+
 
 // 获取所有排行榜交易者数据（带搜索、分页和筛选）
 router.get('/', authenticateUser, authorizeAdmin, async (req, res) => {
@@ -40,10 +21,10 @@ router.get('/', authenticateUser, authorizeAdmin, async (req, res) => {
     // 获取登录用户信息
     const user = await getUserFromSession(req);
     
-    // 如果用户不是超级管理员，并且有trader_uuid，则只返回该trader_uuid的数据
-    if (user && user.trader_uuid) {
-      conditions.push({ type: 'eq', column: 'trader_uuid', value: user.trader_uuid });
-    }
+   // 如果用户不是超级管理员，并且有trader_uuid，则只返回该trader_uuid的数据
+        if (user.role !== 'superadmin') {
+            conditions.push({ type: 'eq', column: 'trader_uuid', value: user.trader_uuid });
+        }
     
     // 构建排序
     const orderBy = { column: 'monthly_profit', ascending: false };
@@ -233,7 +214,7 @@ router.delete('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
     
     // 删除数据
     await del('leaderboard_traders', [
-      { type: 'eq', column: 'id', value: id }
+      { type: 'eq', column: 'id', value: id } ,{ type: 'eq', column: 'trader_uuid', value: req.user.trader_uuid }
     ]);
     
     res.status(200).json({ success: true, message: '排行榜交易者数据已成功删除' });

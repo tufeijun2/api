@@ -1,16 +1,20 @@
 const express = require('express');
 const router = express.Router();
 const { select, insert, update, delete: del, count } = require('../config/supabase');
-const { getUserFromSession } = require('../middleware/auth');
+const { getUserFromSession, checkUserRole, handleError, formatDatetime, authenticateUser, authorizeAdmin } = require('../middleware/auth');
+
 
 // 获取所有VIP公告数据（带搜索、分页和筛选）
-router.get('/', async (req, res) => {
+router.get('/', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     // 处理查询参数
     const { search, priority, type, offset = 0, limit = 10 } = req.query;
 
     // 构建条件
     const conditions = [];
+    // 加入删除状态筛选
+    conditions.push({ type: 'eq', column: 'isdel', value: false });
+
     if (search) {
       conditions.push({ type: 'like', column: 'ILIKE', value: search });
     }
@@ -24,8 +28,8 @@ router.get('/', async (req, res) => {
     // 获取登录用户信息
     const user = await getUserFromSession(req);
     
-    if (user && user.trader_uuid) {
-      conditions.push({ type: 'eq', column: 'trader_uuid', value: user.trader_uuid });
+   if (user.role !== 'superadmin') {
+            conditions.push({ type: 'eq', column: 'trader_uuid', value: user.trader_uuid });
     }
 
     // 构建排序
@@ -52,7 +56,7 @@ router.get('/', async (req, res) => {
 });
 
 // 获取单个VIP公告数据
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const vipAnnouncements = await select('vip_announcements', '*', [{ type: 'eq', column: 'id', value: id }]);
@@ -69,7 +73,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // 创建新的VIP公告数据
-router.post('/', async (req, res) => {
+router.post('/', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { title, content, publisher, date, priority, type } = req.body;
 
@@ -101,7 +105,7 @@ router.post('/', async (req, res) => {
 });
 
 // 更新VIP公告数据
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { title, content, publisher, date, priority, type } = req.body;
@@ -143,7 +147,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // 删除VIP公告数据
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -162,8 +166,9 @@ router.delete('/:id', async (req, res) => {
     }
 
     // 删除公告
-    await del('vip_announcements', [
-      { type: 'eq', column: 'id', value: id }
+    await update('vip_announcements', { isdel: true }, [
+      { type: 'eq', column: 'id', value: id },
+      { type: 'eq', column: 'trader_uuid', value: user.trader_uuid }
     ]);
 
     res.status(200).json({ success: true, message: 'VIP公告数据已成功删除' });

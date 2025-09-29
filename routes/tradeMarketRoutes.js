@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { select, insert, update, delete: del, count } = require('../config/supabase');
-const { getUserFromSession } = require('../middleware/auth');
+const { getUserFromSession, checkUserRole, handleError, formatDatetime, authenticateUser, authorizeAdmin } = require('../middleware/auth');
+
 
 // 获取所有交易市场数据（带搜索、分页和筛选）
-router.get('/', async (req, res) => {
+router.get('/', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     // 处理查询参数
     const { search, offset = 0, limit = 10 } = req.query;
@@ -27,6 +28,7 @@ router.get('/', async (req, res) => {
       orderBy
     );
     
+    
     // 获取总数用于分页
     const total = await count('trade_market', conditions);
     
@@ -43,8 +45,13 @@ router.get('/', async (req, res) => {
 });
 
 // 获取单个交易市场数据
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
+    // 获取登录用户信息
+    const user = await getUserFromSession(req);
+    if (user.role !== 'superadmin') {
+        return res.status(401).json({ success: false, error: '你没有权限进行操作' });
+    }
     const { id } = req.params;
     // id是bigint类型
     const tradeMarkets = await select('trade_market', '*', [{'type':'eq','column':'id','value':id}]);
@@ -61,8 +68,13 @@ router.get('/:id', async (req, res) => {
 });
 
 // 创建新的交易市场数据
-router.post('/', async (req, res) => {
+router.post('/', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
+    // 获取登录用户信息
+    const user = await getUserFromSession(req);
+    if (user.role !== 'superadmin') {
+        return res.status(401).json({ success: false, error: '你没有权限进行操作' });
+    }
     const { marketname, currency, exchange_rate } = req.body;
     
     // 输入验证
@@ -70,11 +82,9 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ success: false, error: '缺少必要的字段: marketname' });
     }
     
-    // 获取登录用户信息
-    const user = await getUserFromSession(req);
-    
+   
     // 检查权限 - 只有管理员可以创建交易市场
-    if (user && user.role !== 'admin') {
+    if (user && user.role !== 'supadmin') {
       return res.status(403).json({ success: false, error: '没有权限创建交易市场' });
     }
     
@@ -92,8 +102,14 @@ router.post('/', async (req, res) => {
 });
 
 // 更新交易市场数据
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
+
   try {
+    // 获取登录用户信息
+    const user = await getUserFromSession(req);
+    if (user.role !== 'superadmin') {
+        return res.status(401).json({ success: false, error: '你没有权限进行操作' });
+    }
     const { id } = req.params;
     const { marketname, currency, exchange_rate } = req.body;
     
@@ -103,9 +119,7 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ success: false, error: '交易市场数据不存在' });
     }
     
-    // 获取登录用户信息
-    const user = await getUserFromSession(req);
-    
+  
     // 检查权限 - 只有管理员可以更新交易市场
     if (user && user.role !== 'admin') {
       return res.status(403).json({ success: false, error: '没有权限更新此交易市场' });
@@ -129,8 +143,14 @@ router.put('/:id', async (req, res) => {
 });
 
 // 删除交易市场数据
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
+    // 获取登录用户信息
+    const user = await getUserFromSession(req);
+    // 检查权限 - 只有管理员可以创建交易市场
+    if (user && user.role !== 'supadmin') {
+      return res.status(403).json({ success: false, error: '没有权限删除此交易市场' });
+    }
     const { id } = req.params;
     
     // 检查数据是否存在
@@ -139,8 +159,7 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ success: false, error: '交易市场数据不存在' });
     }
     
-    // 获取登录用户信息
-    const user = await getUserFromSession(req);
+    
     
     // 检查权限 - 只有管理员可以删除交易市场
     if (user && user.role !== 'admin') {

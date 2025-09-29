@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { select, insert, update, delete: del, count } = require('../config/supabase');
-const { getUserFromSession } = require('../middleware/auth');
+const { getUserFromSession, checkUserRole, handleError, formatDatetime, authenticateUser, authorizeAdmin } = require('../middleware/auth');
+
 
 // 获取所有头像数据（带搜索、分页和筛选）
-router.get('/', async (req, res) => {
+router.get('/', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     // 处理查询参数
     const { search, offset = 0, limit = 10 } = req.query;
@@ -20,10 +21,10 @@ router.get('/', async (req, res) => {
     // 获取登录用户信息
     const user = await getUserFromSession(req);
     
-    // 如果用户不是超级管理员，并且有user_id，则只返回该user_id的数据
-    if (user && user.user_id) {
-      conditions.push({ type: 'eq', column: 'user_id', value: user.user_id });
-    }
+     // 如果用户不是超级管理员，并且有trader_uuid，则只返回该trader_uuid的数据
+        if (user.role !== 'superadmin') {
+            conditions.push({ type: 'eq', column: 'trader_uuid', value: user.trader_uuid });
+        }
     
     // 构建排序
     const orderBy = { 'column': 'created_at', 'ascending': false };
@@ -49,7 +50,7 @@ router.get('/', async (req, res) => {
 });
 
 // 获取单个头像数据
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     // id是uuid类型，需要用引号包裹
@@ -75,7 +76,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // 创建新的头像数据
-router.post('/', async (req, res) => {
+router.post('/', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { user_id, image_url, storage_path, file_name, file_size, mime_type } = req.body;
     
@@ -109,7 +110,7 @@ router.post('/', async (req, res) => {
 });
 
 // 更新头像数据
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { user_id, image_url, storage_path, file_name, file_size, mime_type } = req.body;
@@ -149,7 +150,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // 删除头像数据
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -169,7 +170,7 @@ router.delete('/:id', async (req, res) => {
     
     // 删除头像
     await del('avatars', [
-      { type: 'eq', column: 'id', value: id }
+      { type: 'eq', column: 'id', value: id } ,{ type: 'eq', column: 'trader_uuid', value: req.user.trader_uuid }
     ]);
     
     res.status(200).json({ success: true, message: '头像数据已成功删除' });

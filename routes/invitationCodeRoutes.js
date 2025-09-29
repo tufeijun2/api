@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { select, insert, update, delete: deleteData, count } = require('../config/supabase');
-const { getUserFromSession } = require('../middleware/auth');
+const { getUserFromSession, checkUserRole, handleError, formatDatetime, authenticateUser, authorizeAdmin } = require('../middleware/auth');
+
 
 // 生成随机邀请码
 function generateInvitationCode(length = 12) {
@@ -14,7 +15,7 @@ function generateInvitationCode(length = 12) {
 }
 
 // 获取所有邀请码数据（带搜索、分页和筛选）
-router.get('/', async (req, res) => {
+router.get('/', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     // 处理查询参数
     const { search, isuse, offset = 0, limit = 10 } = req.query;
@@ -31,10 +32,10 @@ router.get('/', async (req, res) => {
     // 获取登录用户信息
     const user = await getUserFromSession(req);
 
-    // 如果用户不是超级管理员，并且有trader_uuid，则只返回该trader_uuid的数据
-    if (user && user.trader_uuid && user.role !== 'admin') {
-      conditions.push({ type: 'eq', column: 'trader_uuid', value: user.trader_uuid });
-    }
+  // 如果用户不是超级管理员，并且有trader_uuid，则只返回该trader_uuid的数据
+        if (user.role !== 'superadmin') {
+            conditions.push({ type: 'eq', column: 'trader_uuid', value: user.trader_uuid });
+        }
 
     // 构建排序
     const orderBy = { column: 'id', ascending: false };
@@ -60,7 +61,7 @@ router.get('/', async (req, res) => {
 });
 
 // 获取单个邀请码数据
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     // id是整数类型
@@ -78,7 +79,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // 创建新的邀请码数据
-router.post('/', async (req, res) => {
+router.post('/', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { code, count = 1 } = req.body;
 
@@ -120,7 +121,7 @@ router.post('/', async (req, res) => {
 });
 
 // 更新邀请码数据
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { code, isuse, user_id, username } = req.body;
@@ -164,7 +165,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // 删除邀请码数据
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -184,7 +185,7 @@ router.delete('/:id', async (req, res) => {
 
     // 删除邀请码
     await deleteData('invitation_code', [
-      { type: 'eq', column: 'id', value: parseInt(id) }
+      { type: 'eq', column: 'id', value: parseInt(id) } ,{ type: 'eq', column: 'trader_uuid', value: req.user.trader_uuid }
     ]);
 
     res.status(200).json({ success: true, message: '邀请码数据已成功删除' });

@@ -18,7 +18,7 @@ router.get('/documentlist', async (req, res) => {
       let conditions = [];
       conditions.push({ type: 'eq', column: 'trader_uuid', value: Web_Trader_UUID });
        const user = await getUserFromSession(req);
-      if(!user)
+      if(!user || !user.signing)
       {
          conditions.push({ type: 'eq', column: 'ispublic', value: 1 });
       }

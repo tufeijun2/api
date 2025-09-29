@@ -1,77 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { select, insert, update, delete: deleteData, count } = require('../config/supabase');
-const { handleError } = require('../utils/errorHandler');
-const { getUserFromSession } = require('../middleware/auth');
+const { getUserFromSession, checkUserRole, handleError, formatDatetime, authenticateUser, authorizeAdmin } = require('../middleware/auth');
 
-// 验证用户是否已登录的中间件
-const authenticateUser = async (req, res, next) => {
-  try {
-    // 从cookie或请求头中获取session token
-    const sessionToken = req.cookies?.session_token || req.headers['session-token'];
-    
-    if (!sessionToken) {
-      return res.status(401).json({ success: false, message: '用户未登录' });
-    }
-    
-    // 查询有效的会话
-    const now = new Date().toISOString();
-    const sessions = await select('user_sessions', '*', [
-      { type: 'eq', column: 'session_token', value: sessionToken },
-      { type: 'gt', column: 'expires_at', value: now }
-    ]);
-    
-    if (!sessions || sessions.length === 0) {
-      // 会话无效或已过期，清除cookie
-      res.clearCookie('session_token', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        path: '/' 
-      });
-      return res.status(401).json({ success: false, message: '会话已过期，请重新登录' });
-    }
-    
-    const session = sessions[0];
-    
-    // 查询用户信息
-    const users = await select('users', '*', [
-      { type: 'eq', column: 'id', value: session.user_id }
-    ]);
-    
-    if (!users || users.length === 0) {
-      return res.status(404).json({ success: false, message: '用户不存在' });
-    }
-    
-    // 将用户信息添加到请求对象中
-    req.user = users[0];
-    
-    next();
-  } catch (error) {
-    console.error('验证用户登录状态失败:', error);
-    res.status(500).json({ success: false, message: '验证用户登录状态失败' });
-  }
-};
 
-// 验证用户是否为管理员的中间件
-const authorizeAdmin = (req, res, next) => {
-  // 确保authenticateUser中间件已在前面执行
-  if (!req.user) {
-    return res.status(401).json({ success: false, message: '用户未登录' });
-  }
-  
-  // 检查用户角色是否为admin或superadmin
-  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
-    return res.status(403).json({ success: false, message: '权限不足，需要管理员权限' });
-  }
-  
-  next();
-};
 
-// 格式化日期时间
-const formatDatetime = (datetime) => {
-  if (!datetime) return null;
-  return new Date(datetime).toISOString().replace('Z', '').replace('T', ' ');
-};
 
 // 格式化题目数据
 const formatQuestion = (question) => {
@@ -100,8 +33,8 @@ router.get('/list', authenticateUser, authorizeAdmin, async (req, res) => {
    // 获取登录用户信息
         const user = await getUserFromSession(req);
         
-        // 如果用户不是超级管理员，并且有trader_uuid，则只返回该trader_uuid的数据
-        if (user && user.trader_uuid) {
+     // 如果用户不是超级管理员，并且有trader_uuid，则只返回该trader_uuid的数据
+        if (user.role !== 'superadmin') {
             conditions.push({ type: 'eq', column: 'trader_uuid', value: user.trader_uuid });
         }
     
@@ -300,6 +233,7 @@ router.delete('/delete/:id', authenticateUser, authorizeAdmin, async (req, res) 
     // 删除题目
     await deleteData('question_bank', [
       { type: 'eq', column: 'id', value: id }
+      ,{ type: 'eq', column: 'trader_uuid', value: req.user.trader_uuid }
     ]);
     
     res.status(200).json({
