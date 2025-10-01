@@ -123,7 +123,7 @@ router.put('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
 
     // 获取登录用户信息
     const user = await getUserFromSession(req);
-
+    const conditions=[];
     if (user.role !== 'superadmin') {
             conditions.push({ type: 'eq', column: 'trader_uuid', value: user.trader_uuid });
     }

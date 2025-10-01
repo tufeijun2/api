@@ -941,10 +941,11 @@ router.post('/portfolio-diagnosis', async (req, res) => {
     try {
         const data = req.body;
          // 获取用户积分规则
-       
+        
         const user=await getUserFromSession(req);
+        const pointsRules = await get_trader_points_rules(req);
          if(user){
-             const pointsRules = await get_trader_points_rules(req);
+           
             if(user.membership_points<pointsRules.ai_diagnostic_consumption)
             {
                 return res.status(200).json({ success: false, error: 'Insufficient user points, unable to use AI stock diagnosis function' });

@@ -4110,7 +4110,7 @@ def ai_stock_diagnosis():
         return jsonify({'error': 'Failed to generate stock diagnosis'}), 500
 
 # AI Portfolio Diagnosis API
-@app.route('/api/ai/portfolio-diagnosis', methods=['POST'])
+@app.route('/api/portfolio-diagnosis', methods=['POST'])
 def ai_portfolio_diagnosis():
     """AI Portfolio Diagnosis API"""
     try:
