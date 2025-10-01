@@ -463,21 +463,21 @@ def index():
                 # 转换为美国东部时间
                 eastern = pytz.timezone('US/Eastern')
                 eastern_time = dt.astimezone(eastern)
-                # strategy_info['formatted_time'] = eastern_time.strftime('%b %d, %Y at %I:%M %p EST')
-                strategy_info['formatted_time'] = eastern_time.strftime('%I:%M')
+                # 显示完整的美国东部时间格式
+                strategy_info['formatted_time'] = eastern_time.strftime('%b %d, %Y at %I:%M %p EST')
             except Exception as e:
                 print(f"[DEBUG] 策略时间格式化错误: {e}")
                 # 使用当前时间作为默认值
                 eastern = pytz.timezone('US/Eastern')
                 current_eastern = datetime.now(eastern)
-                # strategy_info['formatted_time'] = current_eastern.strftime('%b %d, %Y at %I:%M %p EST')
-                strategy_info['formatted_time'] = current_eastern.strftime('%I:%M')
+                # 显示完整的美国东部时间格式
+                strategy_info['formatted_time'] = current_eastern.strftime('%b %d, %Y at %I:%M %p EST')
         else:
             # 如果没有更新时间，使用当前时间
             eastern = pytz.timezone('US/Eastern')
             current_eastern = datetime.now(eastern)
-            # strategy_info['formatted_time'] = current_eastern.strftime('%b %d, %Y at %I:%M %p EST')
-            strategy_info['formatted_time'] = current_eastern.strftime('%I:%M')
+            # 显示完整的美国东部时间格式
+            strategy_info['formatted_time'] = current_eastern.strftime('%b %d, %Y at %I:%M %p EST')
       
         total_profit=0
         for item in trades:
