@@ -4651,9 +4651,9 @@ def generate_stock_diagnosis(symbol, analysis_type, time_frame):
         volume_ratio = stock_data.get('volume_ratio', 1.0)
         
         analysis_focus = {
-            'comprehensive': '全面综合分析',
-            'technical': '技术面深度分析',
-            'fundamental': '基本面详细评估',
+            'comprehensive': 'Comprehensive Analysis',
+            'technical': 'Technical Analysis',
+            'fundamental': 'Fundamental Analysis',
             'sentiment': '市场情绪和投资者心理分析',
             'risk': '风险评估和风险管理建议'
         }
@@ -4755,7 +4755,7 @@ def generate_stock_diagnosis(symbol, analysis_type, time_frame):
         # 如果GPT没有生成分段内容，添加完整分析
         if not diagnosis['sections']:
             diagnosis['sections'].append({
-                'title': '综合分析报告',
+                'title': 'Comprehensive Analysis Report',
                 'score': overall_score,
                 'content': gpt_analysis[:300] + ('...' if len(gpt_analysis) > 300 else '')
             })
@@ -4926,7 +4926,7 @@ Please provide professional analysis and investment recommendations in English.
             return diagnosis
             
         except Exception as e:
-            print(f"[ERROR] GPT持仓分析失败 {symbol}: {e}")
+            print(f"[ERROR] GPT position analysis failed {symbol}: {e}")
             return generate_fallback_portfolio_diagnosis(symbol, purchase_price, purchase_date, portfolio_performance)
             
     except Exception as e:
@@ -4991,7 +4991,7 @@ def calculate_portfolio_score(stock_data, portfolio_performance):
     return max(0, min(100, base_score))
 
 def parse_portfolio_analysis(gpt_text, score):
-    """解析GPT持仓分析文本"""
+    """Parse GPT position analysis text"""
     sections = []
     lines = gpt_text.split('\n')
     current_content = []
@@ -5008,18 +5008,18 @@ def parse_portfolio_analysis(gpt_text, score):
     if len(content_text) > 200:
         mid_point = len(content_text) // 2
         sections.append({
-            'title': '持仓分析',
+            'title': 'Position Analysis',
             'score': min(100, score + random.randint(-10, 10)),
             'content': content_text[:mid_point]
         })
         sections.append({
-            'title': '投资建议',
+            'title': 'Investment Recommendation',
             'score': min(100, score + random.randint(-5, 15)),
             'content': content_text[mid_point:]
         })
     else:
         sections.append({
-            'title': '综合分析',
+            'title': 'Comprehensive Analysis',
             'score': score,
             'content': content_text
         })
@@ -5027,7 +5027,7 @@ def parse_portfolio_analysis(gpt_text, score):
     return sections
 
 def generate_fallback_portfolio_diagnosis(symbol, purchase_price=None, purchase_date=None, portfolio_performance=None):
-    """生成备用持仓诊断"""
+    """Generate fallback position diagnosis"""
     import random
     
     score = random.randint(45, 85)

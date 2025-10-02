@@ -725,7 +725,7 @@ function calculatePortfolioScore(stockData, portfolioPerformance) {
     return Math.max(0, Math.min(100, baseScore));
 }
 
-// 解析GPT持仓分析文本
+// Parse GPT position analysis text
 function parsePortfolioAnalysis(gptText, score) {
     const sections = [];
     const lines = gptText.split('\n').filter(line => line.trim());
@@ -734,18 +734,18 @@ function parsePortfolioAnalysis(gptText, score) {
     if (contentText.length > 200) {
         const midPoint = Math.floor(contentText.length / 2);
         sections.push({
-            'title': '持仓分析',
+            'title': 'Position Analysis',
             'score': Math.min(100, score + getRandomInt(-10, 10)),
             'content': contentText.substring(0, midPoint)
         });
         sections.push({
-            'title': '投资建议',
+            'title': 'Investment Recommendation',
             'score': Math.min(100, score + getRandomInt(-5, 15)),
             'content': contentText.substring(midPoint)
         });
     } else {
         sections.push({
-            'title': '综合分析',
+            'title': 'Comprehensive Analysis',
             'score': score,
             'content': contentText
         });
@@ -754,7 +754,7 @@ function parsePortfolioAnalysis(gptText, score) {
     return sections;
 }
 
-// 生成备用持仓诊断
+// Generate fallback position diagnosis
 function generateFallbackPortfolioDiagnosis(symbol, purchasePrice = null, purchaseDate = null, portfolioPerformance = null) {
     const score = getRandomInt(45, 85);
     
@@ -847,7 +847,7 @@ async function generatePortfolioDiagnosis(symbol, purchasePrice, purchaseDate, p
     }
 }
 
-// 生成模拟持仓分析（替代GPT API）
+// Generate mock position analysis (replace GPT API)
 function generateMockPortfolioAnalysis(symbol, stockData, portfolioPerformance) {
     const currentPrice = parseFloat(stockData.current_price);
     const marketCap = parseFloat(stockData.market_cap);
