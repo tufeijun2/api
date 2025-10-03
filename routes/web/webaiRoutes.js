@@ -43,51 +43,54 @@ function randomSample(array, count) {
 // 获取股票综合数据
 async function getComprehensiveStockData(symbol) {
     try {
-        // 获取真实股票价格
-        const { get_real_time_price } = require('../../config/common');
-        const realPrice = await get_real_time_price('usa', symbol);
+        const axios = require('axios');
+        const apiKey = "YIQDtez6a6OhyWsg2xtbRbOUp3Akhlp4";
         
-        // 如果获取到真实价格，使用真实数据
-        if (realPrice && realPrice > 0) {
-            const realStockData = {
-                symbol: symbol,
-                name: `${symbol} Inc.`,
-                sector: getRandomSector(symbol),
-                current_price: realPrice,
-                change_percent: getRandomFloat(-5, 5).toFixed(2),
-                market_cap: getRandomFloat(50000000000, 2000000000000),
-                pe_ratio: getRandomFloat(10, 50).toFixed(2),
-                beta: getRandomFloat(0.5, 2).toFixed(2),
-                rsi: getRandomInt(30, 70),
-                ma_5: getRandomFloat(realPrice * 0.8, realPrice * 1.2).toFixed(2),
-                ma_20: getRandomFloat(realPrice * 0.8, realPrice * 1.2).toFixed(2),
-                volume_ratio: getRandomFloat(0.5, 3).toFixed(2),
-                target_price: getRandomFloat(realPrice * 0.9, realPrice * 1.5).toFixed(2)
-            };
-            
-            return realStockData;
+        // 获取股票基本信息
+        const tickerResponse = await axios.get(`https://api.polygon.io/v3/reference/tickers/${symbol}?apiKey=${apiKey}`);
+        const tickerInfo = tickerResponse.data.results;
+        
+        // 获取股票快照数据（价格、成交量等）
+        const snapshotResponse = await axios.get(`https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${symbol}?apiKey=${apiKey}`);
+        const snapshot = snapshotResponse.data.ticker;
+        
+        if (!tickerInfo || !snapshot) {
+            return null;
         }
         
-        // 如果无法获取真实价格，使用模拟数据作为备选
-        const mockStockData = {
+        const stockData = {
             symbol: symbol,
-            name: `${symbol} Inc.`,
-            sector: getRandomSector(symbol),
-            current_price: getRandomFloat(50, 500),
-            change_percent: getRandomFloat(-5, 5).toFixed(2),
-            market_cap: getRandomFloat(50000000000, 2000000000000),
-            pe_ratio: getRandomFloat(10, 50).toFixed(2),
-            beta: getRandomFloat(0.5, 2).toFixed(2),
-            rsi: getRandomInt(30, 70),
-            ma_5: getRandomFloat(50, 500).toFixed(2),
-            ma_20: getRandomFloat(50, 500).toFixed(2),
-            volume_ratio: getRandomFloat(0.5, 3).toFixed(2),
-            target_price: getRandomFloat(50, 600).toFixed(2)
+            name: tickerInfo.name,
+            sector: tickerInfo.sic_description || 'Technology',
+            current_price: snapshot.lastTrade ? snapshot.lastTrade.p : null,
+            change_percent: snapshot.todaysChangePerc,
+            change_amount: snapshot.todaysChange,
+            market_cap: tickerInfo.market_cap || null,
+            market: tickerInfo.primary_exchange,
+            currency: tickerInfo.currency_name,
+            open_price: snapshot.day.o,
+            high_price: snapshot.day.h,
+            low_price: snapshot.day.l,
+            close_price: snapshot.day.c,
+            volume: snapshot.day.v,
+            avg_volume: snapshot.prevDay.v,
+            employees: tickerInfo.total_employees,
+            description: tickerInfo.description,
+            website: tickerInfo.homepage_url,
+            shares_outstanding: tickerInfo.share_class_shares_outstanding,
+            volume_ratio: snapshot.day.v / snapshot.prevDay.v,
+            // 暂时设为null，需要额外的API调用来获取这些技术指标
+            pe_ratio: null,
+            beta: null,
+            rsi: null,
+            ma_5: null,
+            ma_20: null,
+            target_price: null
         };
         
-        return mockStockData;
+        return stockData;
     } catch (error) {
-        console.error(`获取股票数据失败 ${symbol}:`, error);
+        console.error(`Failed to fetch comprehensive stock data ${symbol}:`, error);
         return null;
     }
 }
@@ -219,30 +222,35 @@ function getMainBusinessDescription(symbol, sector) {
 
 // 辅助函数：获取财务表现描述
 function getFinancialPerformanceDescription(stockData) {
-    const peRatio = parseFloat(stockData.pe_ratio);
-    const changePercent = parseFloat(stockData.change_percent);
-    
     let performance = '';
     
-    if (peRatio > 0 && peRatio < 20) {
-        performance += 'Attractive valuation with reasonable P/E ratio. ';
-    } else if (peRatio > 20 && peRatio < 30) {
-        performance += 'Moderate valuation in line with market expectations. ';
-    } else if (peRatio > 30) {
-        performance += 'Higher valuation requiring strong growth justification. ';
+    // Only analyze P/E ratio if available
+    if (stockData.pe_ratio && !isNaN(parseFloat(stockData.pe_ratio))) {
+        const peRatio = parseFloat(stockData.pe_ratio);
+        if (peRatio > 0 && peRatio < 20) {
+            performance += 'Attractive valuation with reasonable P/E ratio. ';
+        } else if (peRatio > 20 && peRatio < 30) {
+            performance += 'Moderate valuation in line with market expectations. ';
+        } else if (peRatio > 30) {
+            performance += 'Higher valuation requiring strong growth justification. ';
+        }
     }
     
-    if (changePercent > 10) {
-        performance += 'Strong recent performance with significant upside momentum.';
-    } else if (changePercent > 0) {
-        performance += 'Positive recent performance with steady growth.';
-    } else if (changePercent > -10) {
-        performance += 'Mixed recent performance with some volatility.';
-    } else {
-        performance += 'Challenging recent performance requiring careful evaluation.';
+    // Only analyze change percent if available
+    if (stockData.change_percent && !isNaN(parseFloat(stockData.change_percent))) {
+        const changePercent = parseFloat(stockData.change_percent);
+        if (changePercent > 10) {
+            performance += 'Strong recent performance with significant upside momentum.';
+        } else if (changePercent > 0) {
+            performance += 'Positive recent performance with steady growth.';
+        } else if (changePercent > -10) {
+            performance += 'Mixed recent performance with some volatility.';
+        } else {
+            performance += 'Challenging recent performance requiring careful evaluation.';
+        }
     }
     
-    return performance;
+    return performance || 'Financial analysis limited due to insufficient data.';
 }
 
 // 辅助函数：获取竞争优势
@@ -407,38 +415,37 @@ function parseGPTStrategy(gptResponse) {
 // 生成专业分析
 function generateProfessionalAnalysis(stockData, style, score) {
     const currentPrice = parseFloat(stockData.current_price);
-    const peRatio = parseFloat(stockData.pe_ratio);
-    const beta = parseFloat(stockData.beta);
-    
     let analysisParts = [];
     
-    // Technical Analysis
+    // Company Basic Information Analysis
+    analysisParts.push(`Company Analysis: ${stockData.name} (${stockData.symbol}) is currently trading at $${currentPrice.toFixed(2)} on ${stockData.market}.`);
+    
+    // Market Performance
+    if (stockData.change_percent !== null) {
+        const changeText = stockData.change_percent >= 0 ? `+${stockData.change_percent.toFixed(2)}%` : `${stockData.change_percent.toFixed(2)}%`;
+        const performanceDesc = stockData.change_percent >= 0 ? 'positive' : 'negative';
+        analysisParts.push(`Today's performance shows ${performanceDesc} movement with a ${changeText} change.`);
+    }
+    
+    // Company Size and Sector
+    if (stockData.market_cap && stockData.employees) {
+        const marketCapB = (stockData.market_cap / 1000000000).toFixed(1);
+        analysisParts.push(`${stockData.name} operates in the ${stockData.sector} sector with a market cap of $${marketCapB}B and ${stockData.employees} employees.`);
+    }
+    
+    // Volume Analysis
+    if (stockData.volume_ratio) {
+        const volumeDesc = stockData.volume_ratio > 1.5 ? 'higher than average' : stockData.volume_ratio < 0.8 ? 'lower than average' : 'normal';
+        analysisParts.push(`Current trading volume is ${volumeDesc} at ${stockData.volume_ratio.toFixed(1)}x previous day's volume.`);
+    }
+    
+    // Investment Assessment based on available data
     if (score >= 80) {
-        analysisParts.push('Technical indicators show strong bullish signals with multiple buy signals, indicating short-term upside potential.');
+        analysisParts.push('Investment Outlook: Current fundamentals show favorable conditions for potential growth consideration.');
     } else if (score >= 60) {
-        analysisParts.push('Technical analysis shows overall positive trend with stable support levels, consider moderate allocation.');
+        analysisParts.push('Investment Outlook: Moderate potential exhibited with standard market risk assessment.');
     } else {
-        analysisParts.push('Technical signals are mixed, recommend maintaining caution or phased entry strategy.');
-    }
-    
-    // Valuation Analysis
-    if (peRatio > 0) {
-        if (peRatio < 15) {
-            analysisParts.push(`P/E ratio of ${peRatio} indicates undervalued stock with investment potential.`);
-        } else if (peRatio < 25) {
-            analysisParts.push(`P/E ratio of ${peRatio} indicates reasonable valuation in line with industry average.`);
-        } else {
-            analysisParts.push(`P/E ratio of ${peRatio} indicates higher valuation, monitor fundamental support.`);
-        }
-    }
-    
-    // Risk Assessment
-    if (beta < 0.8) {
-        analysisParts.push(`Beta coefficient of ${beta} suggests lower volatility, suitable for conservative investors.`);
-    } else if (beta < 1.5) {
-        analysisParts.push(`Beta coefficient of ${beta} suggests moderate volatility with controllable risk.`);
-    } else {
-        analysisParts.push(`Beta coefficient of ${beta} suggests higher volatility, recommend controlled position sizing.`);
+        analysisParts.push('Investment Outlook: Recommend cautious evaluation and close market monitoring.');
     }
     
     return analysisParts.join(' ');
@@ -495,8 +502,8 @@ async function generateStockRecommendations(sector, style, risk, timeHorizon, in
                 if (targetPrice > 0) {
                     expectedReturn = ((targetPrice - currentPrice) / currentPrice * 100).toFixed(1);
                 } else {
-                    // 基于评分估算收益
-                    expectedReturn = ((score - 50) * 0.5 + getRandomFloat(-5, 5)).toFixed(1);
+                    // 如果没有目标价格数据，只基于评分保守估算
+                    expectedReturn = ((score - 50) * 0.3).toFixed(1);
                 }
                 
                 // 计算建议仓位（基于投资金额）
@@ -546,10 +553,10 @@ async function generateStockRecommendations(sector, style, risk, timeHorizon, in
                     expectedReturn: Math.max(parseFloat(expectedReturn), -30).toString(),
                     riskLevel: risk.charAt(0).toUpperCase() + risk.slice(1),
                     current_price: currentPrice,
-                    change_percent: parseFloat(stockData.change_percent),
+                    change_percent: stockData.change_percent ? parseFloat(stockData.change_percent) : null,
                     market_cap: stockData.market_cap,
-                    pe_ratio: parseFloat(stockData.pe_ratio),
-                    volume_ratio: parseFloat(stockData.volume_ratio)
+                    pe_ratio: stockData.pe_ratio ? parseFloat(stockData.pe_ratio) : null,
+                    volume_ratio: stockData.volume_ratio ? parseFloat(stockData.volume_ratio) : null
                 };
                         // 获取登录用户信息
                 const user = await getUserFromSession(req);
@@ -664,35 +671,41 @@ router.post('/stock-picker', async (req, res) => {
 function calculatePortfolioScore(stockData, portfolioPerformance) {
     let baseScore = 50;
     
-    // 基于技术指标调整
+    // Only adjust score based on real technical indicators if available
     if (stockData) {
-        const rsi = parseInt(stockData.rsi) || 50;
-        const peRatio = parseFloat(stockData.pe_ratio) || 25;
         const currentPrice = parseFloat(stockData.current_price) || 0;
-        const ma5 = parseFloat(stockData.ma_5) || currentPrice;
-        const ma20 = parseFloat(stockData.ma_20) || currentPrice;
         
-        // RSI评分
-        if (rsi >= 30 && rsi <= 70) {
-            baseScore += 10;
-        } else if (rsi > 70) {
-            baseScore -= 5;
-        } else if (rsi < 30) {
-            baseScore += 5;
+        // Only analyze RSI if real data available
+        if (stockData.rsi && !isNaN(parseInt(stockData.rsi))) {
+            const rsi = parseInt(stockData.rsi);
+            if (rsi >= 30 && rsi <= 70) {
+                baseScore += 10;
+            } else if (rsi > 70) {
+                baseScore -= 5;
+            } else if (rsi < 30) {
+                baseScore += 5;
+            }
         }
         
-        // PE比率评分
-        if (peRatio >= 10 && peRatio <= 25) {
-            baseScore += 10;
-        } else if (peRatio > 40) {
-            baseScore -= 10;
+        // Only analyze P/E ratio if real data available
+        if (stockData.pe_ratio && !isNaN(parseFloat(stockData.pe_ratio))) {
+            const peRatio = parseFloat(stockData.pe_ratio);
+            if (peRatio >= 10 && peRatio <= 25) {
+                baseScore += 10;
+            } else if (peRatio > 40) {
+                baseScore -= 10;
+            }
         }
         
-        // 均线位置
-        if (currentPrice > ma5 && ma5 > ma20) {
-            baseScore += 15;
-        } else if (currentPrice < ma5 && ma5 < ma20) {
-            baseScore -= 15;
+        // Only analyze moving averages if real data available  
+        if (stockData.ma_5 && stockData.ma_20 && currentPrice > 0) {
+            const ma5 = parseFloat(stockData.ma_5);
+            const ma20 = parseFloat(stockData.ma_20);
+            if (currentPrice > ma5 && ma5 > ma20) {
+                baseScore += 15;
+            } else if (currentPrice < ma5 && ma5 < ma20) {
+                baseScore -= 15;
+            }
         }
     }
     
@@ -850,88 +863,60 @@ async function generatePortfolioDiagnosis(symbol, purchasePrice, purchaseDate, p
 // Generate mock position analysis (replace GPT API)
 function generateMockPortfolioAnalysis(symbol, stockData, portfolioPerformance) {
     const currentPrice = parseFloat(stockData.current_price);
-    const marketCap = parseFloat(stockData.market_cap);
-    const peRatio = parseFloat(stockData.pe_ratio);
-    const beta = parseFloat(stockData.beta);
-    const rsi = parseInt(stockData.rsi);
-    
     let analysis = [];
     
-    // 持仓表现评估
+    // Portfolio Performance Assessment
     if (portfolioPerformance) {
         const totalReturn = portfolioPerformance.totalReturn;
         const holdingDays = portfolioPerformance.holdingDays;
         
-        let returnStatus = 'neutral';
-        if (totalReturn > 10) returnStatus = 'positive';
-        else if (totalReturn < -5) returnStatus = 'negative';
-        
         let returnDesc = '';
-        switch(returnStatus) {
-            case 'positive':
-                returnDesc = `The holding has generated a solid return of ${totalReturn.toFixed(2)}% over ${holdingDays} days of holding. This demonstrates successful stock selection.`;
-                break;
-            case 'negative':
-                returnDesc = `The holding has experienced a loss of ${Math.abs(totalReturn).toFixed(2)}% over ${holdingDays} days. This underperformance may require reassessment.`;
-                break;
-            default:
-                returnDesc = `The holding has generated a return of ${totalReturn.toFixed(2)}% over ${holdingDays} days, which aligns with market expectations.`;
+        if (totalReturn > 0) {
+            returnDesc = `The holding has generated a positive return of ${totalReturn.toFixed(2)}% over ${holdingDays} days of holding.`;
+        } else {
+            returnDesc = `The holding has experienced a loss of ${Math.abs(totalReturn).toFixed(2)}% over ${holdingDays} days.`;
         }
         
         analysis.push(`Portfolio Performance Assessment: ${returnDesc}`);
     }
     
-    // 当前市场位置
-    let marketPosition = `Current Market Position: ${symbol} is currently trading at $${currentPrice.toFixed(2)} with a market cap of $${(marketCap / 1000000000).toFixed(1)}B. `;
+    // Company Information
+    if (stockData.name && stockData.sector) {
+        analysis.push(`Company Profile: ${stockData.name} operates in the ${stockData.sector} sector.`);
+    }
     
-    if (peRatio > 0) {
-        if (peRatio < 15) {
-            marketPosition += `The P/E ratio of ${peRatio.toFixed(1)} indicates the stock may be undervalued. `;
-        } else if (peRatio < 25) {
-            marketPosition += `The P/E ratio of ${peRatio.toFixed(1)} reflects a fair valuation relative to sector peers. `;
-        } else {
-            marketPosition += `The P/E ratio of ${peRatio.toFixed(1)} suggests the stock is trading at a premium valuation. `;
+    // Market Position with Real Data
+    let marketPosition = `Current Market Position: ${symbol} is currently trading at $${currentPrice.toFixed(2)}`;
+    
+    if (stockData.market) {
+        marketPosition += ` on ${stockData.market}`;
+    }
+    
+    if (stockData.change_percent !== null) {
+        const changeSymbol = stockData.change_percent >= 0 ? '+' : '';
+        marketPosition += ` with today's change of ${changeSymbol}${stockData.change_percent.toFixed(2)}%`;
+    }
+    
+    analysis.push(marketPosition + '.');
+    
+    // Volume Analysis
+    if (stockData.volume_ratio) {
+        const volumeDesc = stockData.volume_ratio > 1.5 ? 'increased' : stockData.volume_ratio < 0.8 ? 'decreased' : 'normal';
+        analysis.push(`Volume Activity: Trading volume is ${volumeDesc} compared to previous trading day (${stockData.volume_ratio.toFixed(1)}x).`);
+    }
+    
+    // Company Size
+    if (stockData.market_cap) {
+        const marketCapB = (stockData.market_cap / 1000000000).toFixed(1);
+        analysis.push(`Company Size: Market capitalization of $${marketCapB}B`);
+        
+        if (stockData.employees) {
+            analysis[analysis.length - 1] += ` with ${stockData.employees} employees`;
         }
     }
     
-    if (beta < 0.8) {
-        marketPosition += `With a beta of ${beta.toFixed(2)}, the stock exhibits lower volatility than the broader market.`;
-    } else if (beta < 1.3) {
-        marketPosition += `The beta of ${beta.toFixed(2)} indicates volatility comparable to the overall market.`;
-    } else {
-        marketPosition += `The stock has a beta of ${beta.toFixed(2)}, implying higher volatility and potential for larger price swings.`;
-    }
-    
-    analysis.push(marketPosition);
-    
-    // 技术面分析
-    let techAnalysis = `Technical Analysis: `;
-    if (rsi < 30) {
-        techAnalysis += `RSI is at ${rsi}, indicating the stock may be oversold and a bounce could be imminent. `;
-    } else if (rsi > 70) {
-        techAnalysis += `RSI is at ${rsi}, suggesting the stock may be overbought and due for a pullback. `;
-    } else {
-        techAnalysis += `RSI is at ${rsi}, indicating balanced buying and selling pressure. `;
-    }
-    
-    techAnalysis += getRandomInt(0, 1) ? 
-        'Recent price action shows signs of accumulation with increasing volume on up days.' : 
-        'Trading volume has been below average, indicating limited conviction in current price movements.';
-    
-    analysis.push(techAnalysis);
-    
-    // 投资建议
-    let recommendation = `Investment Recommendation: `;
-    const randomChoice = getRandomInt(0, 2);
-    if (randomChoice === 0) {
-        recommendation += 'Maintain current position. The stock continues to demonstrate solid fundamentals and technical strength.';
-    } else if (randomChoice === 1) {
-        recommendation += 'Consider reducing position size. While the long-term outlook remains positive, short-term overbought conditions suggest potential for a correction.';
-    } else {
-        recommendation += 'Hold with a stop-loss order. Maintain current exposure but protect downside risk with a stop-loss at 5-8% below current levels.';
-    }
-    
-    analysis.push(recommendation);
+    // Investment Recommendation
+    analysis.push(`Investment Recommendation: Based on available real market data and current price action, monitor the stock closely and adjust position according to risk tolerance and market trends.`);
     
     return analysis.join('\n');
 }
@@ -1045,71 +1030,5 @@ function int(value) {
     return parseInt(value);
 }
 
-// 创建备用股票数据
-function create_fallback_stock_data(symbol, info = {}) {
-    // 股票名称映射
-    const stock_names = {
-        'AAPL': 'Apple Inc.',
-        'MSFT': 'Microsoft Corp.',
-        'GOOGL': 'Alphabet Inc.',
-        'TSLA': 'Tesla Inc.',
-        'NVDA': 'NVIDIA Corp.',
-        'META': 'Meta Platforms Inc.',
-        'AMZN': 'Amazon.com Inc.',
-        'JNJ': 'Johnson & Johnson',
-        'PFE': 'Pfizer Inc.',
-        'UNH': 'UnitedHealth Group',
-        'MRNA': 'Moderna Inc.',
-        'JPM': 'JPMorgan Chase & Co.',
-        'BAC': 'Bank of America Corp.',
-        'WFC': 'Wells Fargo & Company',
-        'GS': 'Goldman Sachs Group Inc.'
-    };
-    
-    // 行业映射
-    const sector_map = {
-        'AAPL': 'Technology', 'MSFT': 'Technology', 'GOOGL': 'Technology', 'TSLA': 'Technology',
-        'NVDA': 'Technology', 'META': 'Technology', 'AMZN': 'Consumer Discretionary',
-        'JNJ': 'Healthcare', 'PFE': 'Healthcare', 'UNH': 'Healthcare', 'MRNA': 'Healthcare',
-        'JPM': 'Financials', 'BAC': 'Financials', 'WFC': 'Financials', 'GS': 'Financials'
-    };
-    
-    // 模拟合理的股票数据
-    const base_price = getRandomFloat(50, 300);
-    const change_percent = getRandomFloat(-5, 5);
-    const prev_close = base_price / (1 + change_percent/100);
-    
-    console.log(`[DEBUG] 为 ${symbol} 创建备用数据: 价格=${base_price.toFixed(2)}`);
-    
-    const fallback_data = {
-        'symbol': symbol,
-        'name': stock_names[symbol] || `${symbol} Corp.`,
-        'sector': sector_map[symbol] || 'Technology',
-        'industry': 'Software',
-        'current_price': round(base_price, 2),
-        'prev_close': round(prev_close, 2),
-        'change': round(base_price - prev_close, 2),
-        'change_percent': round(change_percent, 2),
-        'market_cap': getRandomInt(10, 2000) * 1000000000,  // 100亿到2万亿
-        'pe_ratio': round(getRandomFloat(15, 35), 1),
-        'forward_pe': round(getRandomFloat(12, 30), 1),
-        'peg_ratio': round(getRandomFloat(0.8, 2.5), 2),
-        'price_to_book': round(getRandomFloat(1.2, 8.0), 2),
-        'debt_to_equity': round(getRandomFloat(0.1, 1.5), 2),
-        'roe': round(getRandomFloat(0.08, 0.25), 3),
-        'dividend_yield': round(getRandomFloat(0, 0.05), 3),
-        'beta': round(getRandomFloat(0.7, 1.8), 2),
-        'ma_5': round(base_price * getRandomFloat(0.98, 1.02), 2),
-        'ma_20': round(base_price * getRandomFloat(0.95, 1.05), 2),
-        'rsi': round(getRandomFloat(30, 70), 1),
-        'volatility': round(getRandomFloat(15, 40), 1),
-        'volume_ratio': round(getRandomFloat(0.5, 3.0), 2),
-        'avg_volume': getRandomInt(1000000, 50000000),
-        'high_52w': round(base_price * getRandomFloat(1.1, 1.5), 2),
-        'low_52w': round(base_price * getRandomFloat(0.6, 0.9), 2),
-        'target_price': round(base_price * getRandomFloat(1.05, 1.25), 2),
-        'recommendation': round(getRandomFloat(1.5, 4.5), 1)
-    };
-    
-    return fallback_data;
-}
+// Note: Removed create_fallback_stock_data function as it generates simulated data
+// Only real price data is now used for stock analysis
