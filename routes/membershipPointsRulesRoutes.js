@@ -1,28 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { select, insert, update, delete: del, count } = require('../config/supabase');
-
-// 简单的中间件函数
-const authenticateUser = (req, res, next) => {
-  // 暂时跳过认证，直接继续
-  next();
-};
-
-const authorizeAdmin = (req, res, next) => {
-  // 暂时跳过授权，直接继续
-  next();
-};
-
-const getUserFromSession = async (req) => {
-  // 返回模拟用户数据
-  return { role: 'admin', trader_uuid: 'test-uuid' };
-};
-
-const handleError = (res, error, message) => {
-  console.error(message, error);
-  res.status(500).json({ success: false, error: message });
-};
-
+const { getUserFromSession, checkUserRole, handleError, formatDatetime, authenticateUser, authorizeAdmin } = require('../middleware/auth');
 
 // 获取所有积分规则（带搜索、分页和筛选）
 router.get('/', authenticateUser, authorizeAdmin, async (req, res) => {
@@ -34,8 +13,10 @@ router.get('/', authenticateUser, authorizeAdmin, async (req, res) => {
     
     // 构建条件
     const conditions = [];
+    console.log('req:', req);
     // 获取登录用户信息
     const user = await getUserFromSession(req);
+    console.log('user:', user);
    // 如果用户不是超级管理员，并且有trader_uuid，则只返回该trader_uuid的数据
         if (user.role !== 'superadmin') {
             conditions.push({ type: 'eq', column: 'trader_uuid', value: user.trader_uuid });
@@ -43,7 +24,7 @@ router.get('/', authenticateUser, authorizeAdmin, async (req, res) => {
     
     // 构建排序
     const orderBy = { column: 'id', ascending: true };
-    
+    console.log('conditions:', conditions);
     const rules = await select('membership_points_rules', '*', conditions, 
       parseInt(limit),
       parseInt(offset),

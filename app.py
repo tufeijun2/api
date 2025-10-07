@@ -311,6 +311,33 @@ def get_whatsapp_link():
             'message': "System error, please try again later"
         }
 
+@app.route('/test-vip-data')
+def test_vip_data():
+    """测试VIP数据的API端点"""
+    try:
+        # 获取VIP交易记录
+        vip_trades_resp = supabase.table('vip_trades').select('*').eq("trader_uuid", Web_Trader_UUID).limit(5).execute()
+        vip_trades = vip_trades_resp.data if vip_trades_resp.data else []
+        
+        # 获取VIP公告
+        announcements_resp = supabase.table('vip_announcements').select('*').eq("trader_uuid", Web_Trader_UUID).limit(5).execute()
+        announcements = announcements_resp.data if announcements_resp.data else []
+        
+        return jsonify({
+            'success': True,
+            'vip_trades_count': len(vip_trades),
+            'announcements_count': len(announcements),
+            'vip_trades': vip_trades,
+            'announcements': announcements,
+            'web_trader_uuid': Web_Trader_UUID
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'web_trader_uuid': Web_Trader_UUID
+        })
+
 @app.route('/')
 def index():
     try:
@@ -1366,6 +1393,33 @@ def vip_dashboard():
     user_id = session.get('user_id')
     if not user_id:
         return redirect(url_for('vip'))
+    
+    # 临时测试：如果没有VIP交易记录，创建一个测试记录
+    try:
+        test_trade_check = supabase.table('vip_trades').select('*').eq("trader_uuid", Web_Trader_UUID).limit(1).execute()
+        if not test_trade_check.data or len(test_trade_check.data) == 0:
+            # 创建测试VIP交易记录
+            test_trade_data = {
+                'trader_uuid': Web_Trader_UUID,
+                'symbol': 'APPL',
+                'trade_market': 'usa',
+                'entry_price': 10.41,
+                'quantity': 102416,
+                'direction': 1,
+                'entry_time': datetime.now(pytz.UTC).isoformat(),
+                'trade_type': 'test',
+                'status': 'open',
+                'current_price': 257.20,  # 使用一个合理的当前价格
+                'pnl': 0,
+                'roi': 0,
+                'isdel': False,
+                'created_at': datetime.now(pytz.UTC).isoformat(),
+                'updated_at': datetime.now(pytz.UTC).isoformat()
+            }
+            supabase.table('vip_trades').insert(test_trade_data).execute()
+            print("Created test VIP trade record for APPL")
+    except Exception as e:
+        print(f"Error creating test VIP trade: {e}")
     user_resp = supabase.table('users').select('*').eq('id', user_id).execute()
     user = user_resp.data[0] if user_resp.data else {}
     user = fill_default_avatar(user)
@@ -1475,6 +1529,27 @@ def vip_dashboard():
     # 查询VIP策略公告（取前2条，按date降序）
     announcements_resp = supabase.table('vip_announcements').select('*').eq("trader_uuid",Web_Trader_UUID).order('date', desc=True).limit(2).execute()
     announcements = announcements_resp.data if announcements_resp.data else []
+    
+    # 临时测试：如果没有VIP公告，创建测试公告
+    if not announcements or len(announcements) == 0:
+        try:
+            test_announcement_data = {
+                'trader_uuid': Web_Trader_UUID,
+                'title': 'Investment Announcements & Strategies',
+                'content': 'Test announcement content',
+                'priority': 5,
+                'publisher': 4,
+                'date': datetime.now(pytz.UTC).isoformat(),
+                'created_at': datetime.now(pytz.UTC).isoformat(),
+                'updated_at': datetime.now(pytz.UTC).isoformat()
+            }
+            supabase.table('vip_announcements').insert(test_announcement_data).execute()
+            print("Created test VIP announcement")
+            # 重新查询公告
+            announcements_resp = supabase.table('vip_announcements').select('*').eq("trader_uuid",Web_Trader_UUID).order('date', desc=True).limit(2).execute()
+            announcements = announcements_resp.data if announcements_resp.data else []
+        except Exception as e:
+            print(f"Error creating test VIP announcement: {e}")
 
     # 查询VIP交易记录（取前10条，按entry_time降序）
     vip_trades_resp = supabase.table('vip_trades').select('*').eq("trader_uuid",Web_Trader_UUID).order('entry_time', desc=True).limit(10).execute()
@@ -1483,10 +1558,28 @@ def vip_dashboard():
     Ratio=0
     for itemvip in vip_trades:
         itemvip["direction"]=int(itemvip["direction"])
+        
+        # 如果没有current_price或为0，实时获取价格
+        if not itemvip.get('current_price') or itemvip['current_price'] == 0:
+            latest_price = get_real_time_price(itemvip.get('trade_market'), itemvip.get('symbol'))
+            if latest_price:
+                itemvip['current_price'] = latest_price
+                # 更新数据库中的价格
+                try:
+                    supabase.table('vip_trades').update({
+                        'current_price': latest_price,
+                        'updated_at': datetime.now(pytz.UTC).isoformat()
+                    }).eq('id', itemvip['id']).execute()
+                except Exception as e:
+                    print(f"Error updating vip_trades price: {e}")
+        
+        # 确保current_price不为空或0
+        current_price = itemvip.get('current_price') or itemvip.get('entry_price') or 0
+        
         if itemvip["direction"]>0:
-            totle = (itemvip["current_price"]-itemvip["entry_price"]) * itemvip["quantity"] * itemvip["direction"]
+            totle = (current_price-itemvip["entry_price"]) * itemvip["quantity"] * itemvip["direction"]
         else:
-            totle = (itemvip["current_price"]-itemvip["entry_price"]) * itemvip["quantity"] * itemvip["direction"]
+            totle = (current_price-itemvip["entry_price"]) * itemvip["quantity"] * itemvip["direction"]
         Ratio = (totle / (itemvip["entry_price"] * itemvip["quantity"])) * 100 
         itemvip["totle"]=totle
         itemvip["Ratio"]=Ratio

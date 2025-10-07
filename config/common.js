@@ -65,7 +65,7 @@ async function get_real_time_price(market, symbol, asset_type = null) {
    
       const url = `https://api.polygon.io/v2/last/trade/${symbol}?apiKey=${api_key}`;
       try {
-        const resp = await axios.get(url, { timeout: 5000 });
+        const resp = await axios.get(url, { timeout: 8000 });
       
         const data = resp.data;
         let price = null;
@@ -76,11 +76,11 @@ async function get_real_time_price(market, symbol, asset_type = null) {
           price = data.last.price;
         }
       
-        if (price !== null) {
+        if (price !== null && price > 0) {
           return parseFloat(price);
         }
       } catch (error) {
-        //console.error(`Error fetching price for ${symbol}:`, error);
+        console.error(`Error fetching price for ${symbol}:`, error.message);
         return null;
       }
     
