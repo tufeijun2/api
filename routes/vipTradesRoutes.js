@@ -194,7 +194,7 @@ router.put('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
 });
 
 // 删除VIP交易数据
-router.delete('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
+router.delete('/:id/delete', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -206,16 +206,13 @@ router.delete('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
     
     // 获取登录用户信息
     const user = await getUserFromSession(req);
-    
+    let conditions=[{ type: 'eq', column: 'id', value: id }]
     if (user.role !== 'superadmin') {
             conditions.push({ type: 'eq', column: 'trader_uuid', value: user.trader_uuid });
     }
     
     // 删除交易记录
-    await update('vip_trades', { isdel: true }, [
-      { type: 'eq', column: 'id', value: id },
-      { type: 'eq', column: 'trader_uuid', value: user.trader_uuid }
-    ]);
+    await update('vip_trades', { isdel: true }, conditions);
     
     res.status(200).json({ success: true, message: 'VIP交易数据已成功删除' });
   } catch (error) {

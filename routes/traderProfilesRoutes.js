@@ -101,7 +101,7 @@ router.post('/', authenticateUser, authorizeAdmin, async (req, res) => {
             years_of_experience, total_trades = 0, win_rate,
             trader_uuid, website_title, home_top_title,
             use_dialog = 1, allow_close_dialog = 0, agreement,
-            members_count = 0, likes_count = 0,home_top_title_link
+            members_count = 0, likes_count = 0,home_top_title_link,terms
         } = req.body;
         
         // 验证输入
@@ -131,7 +131,8 @@ router.post('/', authenticateUser, authorizeAdmin, async (req, res) => {
             agreement,
             members_count: parseInt(members_count) || 0,
             likes_count: parseInt(likes_count) || 0,
-            home_top_title_link:home_top_title_link
+            home_top_title_link:home_top_title_link,
+            terms:terms || '',
         };
         
         const insertedProfiles = await insert('trader_profiles', newProfile);
@@ -151,7 +152,7 @@ router.put('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
             years_of_experience, total_trades, win_rate,
             trader_uuid, website_title, home_top_title,
             use_dialog, allow_close_dialog, agreement,
-            members_count, likes_count,home_top_title_link
+            members_count, likes_count,home_top_title_link,terms
         } = req.body;
         
         // 检查交易者档案是否存在
@@ -189,6 +190,7 @@ router.put('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
         if (members_count !== undefined) updateData.members_count = parseInt(members_count) || 0;
         if (likes_count !== undefined) updateData.likes_count = parseInt(likes_count) || 0;
         if (home_top_title_link !== undefined) updateData.home_top_title_link = home_top_title_link;
+        if (terms !== undefined) updateData.terms = terms;
         
         // 更新交易者档案
         const updatedProfiles = await update('trader_profiles', updateData, [
