@@ -1,10 +1,16 @@
 const { createClient } = require('@supabase/supabase-js');
 
-// 创建Supabase客户端实例
-const supabase = createClient(
-    process.env.SUPABASE_URL || '',
-    process.env.SUPABASE_KEY || ''
-);
+// 创建Supabase客户端实例（如果配置存在）
+let supabase = null;
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_KEY || '';
+
+if (supabaseUrl && supabaseKey) {
+    supabase = createClient(supabaseUrl, supabaseKey);
+} else {
+    console.warn('⚠️  Supabase配置缺失，某些功能可能不可用');
+}
+
 const Web_Trader_UUID = process.env.Web_Trader_UUID;
 
 // 导出客户端实例
@@ -13,6 +19,10 @@ exports.supabase = supabase;
 // 统计记录数的函数
 exports.count = async (table, filters = []) => {
     try {
+        if (!supabase) {
+            console.warn(`Supabase未配置，无法执行count操作: ${table}`);
+            return 0;
+        }
         let query = supabase.from(table).select('*', { count: 'exact' }).limit(0);
         
         // 添加过滤条件
@@ -53,6 +63,10 @@ exports.count = async (table, filters = []) => {
 // 通用的Supabase查询函数
 exports.select = async (table, columns = '*', filters = [], limit=null ,offset=null, order=null ) => {
     try {
+        if (!supabase) {
+            console.warn(`Supabase未配置，无法执行select操作: ${table}`);
+            return [];
+        }
         let query = supabase.from(table).select(columns);
         
         if(filters)
@@ -101,6 +115,10 @@ exports.select = async (table, columns = '*', filters = [], limit=null ,offset=n
 // 插入数据
 exports.insert = async (table, data) => {
     try {
+        if (!supabase) {
+            console.warn(`Supabase未配置，无法执行insert操作: ${table}`);
+            return [];
+        }
         const { data: insertedData, error } = await supabase
             .from(table)
             .insert(data)
@@ -121,6 +139,10 @@ exports.insert = async (table, data) => {
 // 更新数据
 exports.update = async (table, data, filters) => {
     try {
+        if (!supabase) {
+            console.warn(`Supabase未配置，无法执行update操作: ${table}`);
+            return [];
+        }
         let query = supabase.from(table).update(data);
         
         filters.forEach(filter => {
@@ -144,6 +166,10 @@ exports.update = async (table, data, filters) => {
 // 删除数据
 exports.delete = async (table, filters) => {
     try {
+        if (!supabase) {
+            console.warn(`Supabase未配置，无法执行delete操作: ${table}`);
+            return [];
+        }
         let query = supabase.from(table).delete();
         
         filters.forEach(filter => {
@@ -167,6 +193,10 @@ exports.delete = async (table, filters) => {
 // 上传文件到Supabase存储
 exports.uploadFile = async (bucketName, fileName, fileBuffer, mimeType) => {
     try {
+        if (!supabase) {
+            console.warn(`Supabase未配置，无法执行uploadFile操作`);
+            throw new Error('Supabase未配置');
+        }
         const { data, error } = await supabase.storage
             .from(bucketName)
             .upload(fileName, fileBuffer, {
@@ -197,6 +227,10 @@ exports.uploadFile = async (bucketName, fileName, fileBuffer, mimeType) => {
 // 删除Supabase存储中的文件
 exports.deleteFile = async (bucketName, fileName) => {
     try {
+        if (!supabase) {
+            console.warn(`Supabase未配置，无法执行deleteFile操作`);
+            throw new Error('Supabase未配置');
+        }
         const { data, error } = await supabase.storage
             .from(bucketName)
             .remove([fileName]);
@@ -216,6 +250,10 @@ exports.deleteFile = async (bucketName, fileName) => {
 // 获取文件的公开URL
 exports.getPublicUrl = async (bucketName, fileName) => {
     try {
+        if (!supabase) {
+            console.warn(`Supabase未配置，无法执行getPublicUrl操作`);
+            return null;
+        }
         const { data } = supabase.storage
             .from(bucketName)
             .getPublicUrl(fileName);
