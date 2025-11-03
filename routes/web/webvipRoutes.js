@@ -73,30 +73,7 @@ router.get('/VipDashboardData', async (req, res) => {
       0, orderBy
     );
     
-    // 如果没有VIP公告，创建测试公告
-    if (!vip_announcements_List || vip_announcements_List.length === 0) {
-      try {
-        const testAnnouncementData = {
-          trader_uuid: Web_Trader_UUID,
-          title: 'Investment Announcements & Strategies',
-          content: 'Test announcement content for VIP members',
-          priority: 5,
-          publisher: 4,
-          date: new Date().toISOString(),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        
-        await insert('vip_announcements', testAnnouncementData);
-        console.log("Created test VIP announcement");
-        
-        // 重新查询
-        const updatedAnnouncements = await select('vip_announcements', '*', conditions, 1, 0, orderBy);
-        vip_announcements_List.push(...(updatedAnnouncements || []));
-      } catch (error) {
-        console.error("Error creating test VIP announcement:", error);
-      }
-    }
+    
     conditions = [];
     //获取VIP交易记录
     conditions.push({ type: 'eq', column: 'trader_uuid', value: Web_Trader_UUID });
@@ -107,37 +84,6 @@ router.get('/VipDashboardData', async (req, res) => {
       null, orderBy
     );
     
-    // 如果没有VIP交易记录，创建一个测试记录
-    if (!vip_trade_list || vip_trade_list.length === 0) {
-      try {
-        const testTradeData = {
-          trader_uuid: Web_Trader_UUID,
-          symbol: 'APPL',
-          trade_market: 'usa',
-          entry_price: 10.41,
-          quantity: 102416,
-          direction: 1,
-          entry_time: new Date().toISOString(),
-          trade_type: 'test',
-          status: 'open',
-          current_price: 257.20,
-          pnl: 0,
-          roi: 0,
-          isdel: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        
-        await insert('vip_trades', testTradeData);
-        console.log("Created test VIP trade record");
-        
-        // 重新查询
-        const updatedTrades = await select('vip_trades', '*', conditions, null, null, orderBy);
-        vip_trade_list.push(...(updatedTrades || []));
-      } catch (error) {
-        console.error("Error creating test VIP trade:", error);
-      }
-    }
     
     // 为VIP交易记录添加实时价格获取
     const { get_real_time_price } = require('../../config/common');
@@ -165,18 +111,6 @@ router.get('/VipDashboardData', async (req, res) => {
     // 获取登录用户信息
     let user = await getUserFromSession(req);
     
-    // 如果没有用户会话，创建一个测试用户对象
-    if (!user) {
-      console.log("No user session found, using test user");
-      // 对于测试目的，创建一个模拟用户
-      user = {
-        id: 1,
-        username: 'test_user',
-        membership_level: 'VIP Member',
-        membership_points: 1000
-      };
-    }
-    
     //获取VIP公告
     conditions.push({ type: 'eq', column: 'trader_uuid', value: Web_Trader_UUID });
     conditions.push({ type: 'eq', column: 'user_id', value: user.id });
@@ -201,15 +135,15 @@ router.get('/VipDashboardData', async (req, res) => {
     conditions.push({ type: 'eq', column: 'trader_uuid', value: Web_Trader_UUID });
     orderBy = { 'column': 'id', 'ascending': false };
     const vedioslist = await select('videos', '*', conditions,
-      null,
-      null, orderBy
+      3,
+      0, orderBy
     );
     conditions = [];
     conditions.push({ type: 'eq', column: 'trader_uuid', value: Web_Trader_UUID });
     orderBy = { 'column': 'id', 'ascending': false };
     const documentslist = await select('documents', '*', conditions,
-      null,
-      null, orderBy
+      3,
+      0, orderBy
     );
 
     res.status(200).json({
