@@ -81,7 +81,16 @@ exports.select = async (table, columns = '*', filters = [], limit=null ,offset=n
         }
        
         if (order) {
-            query.order(order.column, { ascending: order.ascending });
+            if(Array.isArray(order))
+            {
+                order.forEach(o => {
+                    query.order(o.column, { ascending: o.ascending });
+                });
+            }
+            else
+            {
+                query.order(order.column, { ascending: order.ascending });
+            }
         }
         
         const { data, error } = await query;

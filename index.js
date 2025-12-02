@@ -3,6 +3,7 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const path = require('path');
 const session = require('express-session');
+const { userRateLimit } = require('./middleware/rateLimiter');
 
 // 加载环境变量
 dotenv.config();
@@ -28,6 +29,9 @@ app.use(session({
     maxAge: 24 * 60 * 60 * 1000 // 24小时
   }
 }));
+
+// API限流中间件（应用于所有API路由）
+app.use('/api', userRateLimit());
 
 // 静态文件服务（用于开发环境）
 if (process.env.NODE_ENV === 'development') {

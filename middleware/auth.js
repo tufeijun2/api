@@ -16,6 +16,7 @@ const getUserFromSession = async (req) => {
     
     // 查询有效的会话
     const now = new Date().toISOString();
+    console.log("当前时间:", now);
     const sessions = await select('user_sessions', '*', [
       { type: 'eq', column: 'session_token', value: sessionToken },
       { type: 'gt', column: 'expires_at', value: now }
@@ -35,7 +36,7 @@ const getUserFromSession = async (req) => {
     if (!users || users.length === 0) {
       return null;
     }
-    
+    console.log("当前用户:", users[0]);
     return users[0];
   } catch (error) {
     console.error('获取用户信息失败:', error);
