@@ -130,6 +130,9 @@ exports.insert = async (table, data) => {
 // 更新数据
 exports.update = async (table, data, filters) => {
     try {
+        console.log(`🔄 [Supabase Update] 表: ${table}, 数据:`, JSON.stringify(data, null, 2));
+        console.log(`🔄 [Supabase Update] 过滤条件:`, JSON.stringify(filters, null, 2));
+        
         let query = supabase.from(table).update(data);
         
         filters.forEach(filter => {
@@ -139,13 +142,18 @@ exports.update = async (table, data, filters) => {
         const { data: updatedData, error } = await query.select();
         
         if (error) {
-            console.error('Supabase更新错误:', error);
+            console.error('❌ Supabase更新错误:', error);
+            console.error('❌ 错误详情:', JSON.stringify(error, null, 2));
             throw error;
         }
         
+        console.log(`✅ [Supabase Update] 更新成功，返回数据:`, JSON.stringify(updatedData, null, 2));
+        console.log(`✅ [Supabase Update] 更新记录数:`, updatedData ? updatedData.length : 0);
+        
         return updatedData;
     } catch (error) {
-        console.error('Supabase更新失败:', error);
+        console.error('❌ Supabase更新失败:', error);
+        console.error('❌ 错误堆栈:', error.stack);
         throw error;
     }
 };

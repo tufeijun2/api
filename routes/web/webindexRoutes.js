@@ -59,6 +59,15 @@ router.get('/index', async (req, res) => {
             null, orderBy
         );
        
+      // 调试：检查 is_important 字段是否存在
+      if (trades && trades.length > 0) {
+        console.log('📊 查询到的交易记录数量:', trades.length);
+        console.log('📊 第一条记录的字段:', Object.keys(trades[0]));
+        console.log('📊 第一条记录的 is_important 值:', trades[0].is_important);
+        const importantCount = trades.filter(t => t.is_important === true || t.is_important === 1).length;
+        console.log('📊 重点交易记录数量:', importantCount);
+      }
+       
          // 格式化公告数据
         trades = trades.map(item => ({
             ...item,
@@ -67,6 +76,33 @@ router.get('/index', async (req, res) => {
             Amount: (item.exit_price && item.exit_date)?((item.exit_price-item.entry_price )* item.size*item.direction).toFixed(2):((item.current_price-item.entry_price )* item.size*item.direction).toFixed(2),
             status: (item.exit_price && item.exit_date)?  "Take Profit":"Active",
         }));
+      
+      // 在后端进行排序：重点交易置顶
+      trades = trades.sort((a, b) => {
+        // 首先按重点交易排序：重点交易在前
+        const isImportantA = a.is_important === true || a.is_important === 1 || a.is_important === 'true' || a.is_featured === true || a.is_featured === 1;
+        const isImportantB = b.is_important === true || b.is_important === 1 || b.is_important === 'true' || b.is_featured === true || b.is_featured === 1;
+        
+        if (isImportantA !== isImportantB) {
+          return isImportantA ? -1 : 1; // 重点交易在前
+        }
+        
+        // 然后按状态排序：Active在前，平仓在后
+        const isActiveA = a.status === 'Active';
+        const isActiveB = b.status === 'Active';
+        
+        if (isActiveA !== isActiveB) {
+          return isActiveA ? -1 : 1; // Active在前
+        }
+        
+        // 同状态内按时间排序（最新的在前）
+        const dateA = isActiveA ? new Date(a.entry_date) : new Date(a.exit_date || a.entry_date);
+        const dateB = isActiveB ? new Date(b.entry_date) : new Date(b.exit_date || b.entry_date);
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+      console.log('📊 排序后的重点交易数量:', trades.filter(t => t.is_important === true || t.is_important === 1).length);
+      console.log('📊 排序后的前3条记录:', trades.slice(0, 3).map(t => ({ symbol: t.symbol, is_important: t.is_important, status: t.status })));
         let Monthly=0
         console.log(moment().add(-1, 'month').format('YYYY-MM-01'))
         const exitList= trades.filter((item)=> !item.exit_date || item.exit_date>=moment().format('YYYY-MM-01'))
