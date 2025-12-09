@@ -17,12 +17,10 @@ router.get('/videolist', async (req, res) => {
       const Web_Trader_UUID = req.headers['web-trader-uuid'];
       let conditions = [];
       conditions.push({ type: 'eq', column: 'trader_uuid', value: Web_Trader_UUID });
-      // 获取登录用户信息
-        const user = await getUserFromSession(req);
-      if(!user || !user.signing)
-      {
-         conditions.push({ type: 'eq', column: 'ispublic', value: 1 });
-      }
+      // 获取登录用户信息（用于后续权限检查，但不影响列表返回）
+      const user = await getUserFromSession(req);
+      // 移除对未登录用户的过滤，让所有用户都能看到所有视频（包括VIP）的数量
+      // 注意：实际播放VIP视频时仍需要权限检查
       orderBy = {'column':'ispublic','ascending':false};
       const vedioslist = await select('videos', '*', conditions,
           null,

@@ -133,10 +133,21 @@ exports.update = async (table, data, filters) => {
         console.log(`🔄 [Supabase Update] 表: ${table}, 数据:`, JSON.stringify(data, null, 2));
         console.log(`🔄 [Supabase Update] 过滤条件:`, JSON.stringify(filters, null, 2));
         
+        // 检查filters是否为空
+        if (!filters || filters.length === 0) {
+            throw new Error('更新操作必须提供至少一个过滤条件，以防止误更新所有记录');
+        }
+        
         let query = supabase.from(table).update(data);
         
         filters.forEach(filter => {
-            query = query.eq(filter.column, filter.value);
+            if (filter.type === 'eq') {
+                query = query.eq(filter.column, filter.value);
+            } else if (filter.type === 'neq') {
+                query = query.neq(filter.column, filter.value);
+            } else if (filter.type === 'in') {
+                query = query.in(filter.column, filter.value);
+            }
         });
         
         const { data: updatedData, error } = await query.select();

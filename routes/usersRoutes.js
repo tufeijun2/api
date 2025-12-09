@@ -575,6 +575,11 @@ router.get('/menu', authenticateUser, async (req, res) => {
                         id: '/system/leaderboardTraders',
                         icon: "layui-icon-ranking",
                         title: '交易员排行榜管理',
+                    },
+                    {
+                        id: '/system/partnerOrganizations',
+                        icon: "layui-icon-link",
+                        title: '合作单位管理',
                     }
                 ]
             }

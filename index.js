@@ -99,6 +99,7 @@ const usersviewRoutes = require('./routes/usersviewRoutes');
 const userStatisticsRoutes = require('./routes/userStatisticsRoutes');
 const questionBankRoutes = require('./routes/questionBankRoutes');
 const webdocumentRoutes = require('./routes/web/webdocumentRoutes');
+const partnerOrganizationsRoutes = require('./routes/partnerOrganizationsRoutes');
 
 // 使用路由
 app.use('/api/users', usersRoutes);
@@ -132,6 +133,7 @@ app.use('/api/web/vip', vipRoutes);
 app.use('/api/web/ai', webaiRoutes);
 app.use('/api/invitation-code', invitationCodeRoutes);
 app.use('/api/web/videos', webvideoRoutes);
+app.use('/api/partner-organizations', partnerOrganizationsRoutes);
 app.use('/api/web/documents', webdocumentRoutes);
 
 app.use('/api/web/test-gpt', testGptRoutes);
