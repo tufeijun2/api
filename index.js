@@ -160,7 +160,11 @@ const PORT = process.env.PORT || 3001;
 const server = app.listen(PORT, () => {
     console.log(`服务器运行在 http://localhost:${PORT}`);
     // 服务器启动成功后初始化定时任务
+<<<<<<< HEAD
     // afterServerStart();
+=======
+    afterServerStart();
+>>>>>>> 46e3aca09df426db1c4ec7826d0d2d5426c174d5
 });
 
 // 定时任务初始化
@@ -177,4 +181,8 @@ afterServerStart = () => {
 
 // 导出应用（用于测试）
 module.exports = app;
+<<<<<<< HEAD
 // module.exports.afterServerStart = afterServerStart;
+=======
+module.exports.afterServerStart = afterServerStart;
+>>>>>>> 46e3aca09df426db1c4ec7826d0d2d5426c174d5

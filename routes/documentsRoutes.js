@@ -72,7 +72,11 @@ router.get('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
 // 创建新的文档数据
 router.post('/', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
+<<<<<<< HEAD
     const { title, description, file_url, file_type,last_update } = req.body;
+=======
+    const { title, description, file_url, file_type } = req.body;
+>>>>>>> 46e3aca09df426db1c4ec7826d0d2d5426c174d5
     
     // 输入验证
     if (!title || !file_url) {
@@ -87,7 +91,11 @@ router.post('/', authenticateUser, authorizeAdmin, async (req, res) => {
       description,
       file_url,
       file_type,
+<<<<<<< HEAD
       last_update: last_update,
+=======
+      last_update: new Date(),
+>>>>>>> 46e3aca09df426db1c4ec7826d0d2d5426c174d5
       views: 0,
       trader_uuid: user && user.trader_uuid ? user.trader_uuid : null,
       ispublic: 1 // 默认公开
@@ -104,7 +112,11 @@ router.post('/', authenticateUser, authorizeAdmin, async (req, res) => {
 router.put('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
       const { id } = req.params;
+<<<<<<< HEAD
       const { title, description, file_url, file_type, ispublic,last_update } = req.body;
+=======
+      const { title, description, file_url, file_type, ispublic } = req.body;
+>>>>>>> 46e3aca09df426db1c4ec7826d0d2d5426c174d5
       // id是整数类型
       
       // 检查数据是否存在
@@ -130,7 +142,10 @@ router.put('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
     if (file_url !== undefined) updateData.file_url = file_url;
     if (file_type !== undefined) updateData.file_type = file_type;
     if (ispublic !== undefined) updateData.ispublic = ispublic;
+<<<<<<< HEAD
     if (last_update !== undefined) updateData.last_update = last_update;
+=======
+>>>>>>> 46e3aca09df426db1c4ec7826d0d2d5426c174d5
     console.log(updateData)
    // const updatedDocument = await update('documents', id, updateData);
     const updatedDocument = await update('documents', updateData, [
