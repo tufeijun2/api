@@ -11,6 +11,14 @@ router.get('/trader_profiles', async (req, res) => {
       const Web_Trader_UUID = req.headers['web-trader-uuid'];
       const conditions = [];
       console.log(Web_Trader_UUID)
+      
+      if (!Web_Trader_UUID) {
+        return res.status(400).json({
+          success: false,
+          message: 'Web-Trader-UUID header is required'
+        });
+      }
+      
       conditions.push({ type: 'eq', column: 'trader_uuid', value: Web_Trader_UUID });
       // 加入删除状态筛选
       conditions.push({ type: 'eq', column: 'isdel', value: false });
@@ -19,13 +27,18 @@ router.get('/trader_profiles', async (req, res) => {
           null,
             null, null
         );
+      
+      // 确保 users 存在且是数组
+      const userData = (users && Array.isArray(users) && users.length > 0) ? users[0] : null;
+      
       res.status(200).json({ 
         success: true, 
         data:{
-          trader_profiles: users[0],
+          trader_profiles: userData || {},
         }
       });
   } catch (error) {
+    console.error('获取交易员信息失败:', error);
     handleError(res, error, 'Failed to fetch data');
   }
 });
@@ -36,19 +49,53 @@ router.get('/index', async (req, res) => {
      const Web_Trader_UUID = req.headers['web-trader-uuid'];
       const conditions = [];
      
+      if (!Web_Trader_UUID) {
+        return res.status(400).json({
+          success: false,
+          message: 'Web-Trader-UUID header is required'
+        });
+      }
+     
       conditions.push({ type: 'eq', column: 'trader_uuid', value: Web_Trader_UUID });
       // const orderBy = {'column':'id','ascending':false};
       const users = await select('trader_profiles', '*', conditions,
           null,
             null, null
         );
+      
+      if (!users || users.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Trader profile not found'
+        });
+      }
+      
       let orderBy = {'column':'updated_at','ascending':false};
-      const strategy_info= await select('trading_strategies', '*', conditions,
+      const strategy_info_raw = await select('trading_strategies', '*', conditions,
           1,
             0, orderBy
         );
-       orderBy = {'column':'id','ascending':false};
+      const strategy_info = strategy_info_raw && strategy_info_raw.length > 0 ? strategy_info_raw[0] : null;
+      
+      orderBy = {'column':'id','ascending':false};
       // 获取三个月前的日期
+      const threeMonthsAgo = moment().subtract(3, 'months').format('YYYY-MM-DD HH:mm:ss');
+      const tradeConditions = [...conditions];
+      tradeConditions.push({ type: 'gte', column: 'entry_date', value: threeMonthsAgo });
+      
+      let trades = null;
+      try {
+        trades = await select('view_trader_trade', '*', tradeConditions,
+            null,
+              null, orderBy
+        );
+      } catch (error) {
+        console.error('Failed to fetch trades:', error);
+      }
+      
+      if (!trades) {
+        trades = [];
+      }
        
       // 调试：检查 is_important 字段是否存在
       if (trades && trades.length > 0) {
@@ -111,10 +158,11 @@ router.get('/index', async (req, res) => {
       res.status(200).json({ 
         success: true, 
         data:{
-          trader_profiles: users[0],
-          trades:trades,
-          Monthly:Monthly.toFixed(2),
-          Total:Total.toFixed(2),
+          trader_profiles: users[0] || {},
+          strategy_info: strategy_info,
+          trades: trades || [],
+          Monthly: Monthly ? Monthly.toFixed(2) : '0.00',
+          Total: Total ? Total.toFixed(2) : '0.00',
         }
       });
   } catch (error) {
