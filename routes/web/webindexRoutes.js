@@ -33,11 +33,6 @@ router.get('/trader_profiles', async (req, res) => {
 // 获取网站首页数据
 router.get('/index', async (req, res) => {
   try {
-<<<<<<< HEAD
-    // 获取三个月前的日期
-    
-=======
->>>>>>> 46e3aca09df426db1c4ec7826d0d2d5426c174d5
      const Web_Trader_UUID = req.headers['web-trader-uuid'];
       const conditions = [];
      
@@ -47,18 +42,6 @@ router.get('/index', async (req, res) => {
           null,
             null, null
         );
-<<<<<<< HEAD
-      
-      // 检查用户是否存在
-      if (!users || users.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'Trader profile not found'
-        });
-      }
-      
-=======
->>>>>>> 46e3aca09df426db1c4ec7826d0d2d5426c174d5
       let orderBy = {'column':'updated_at','ascending':false};
       const strategy_info= await select('trading_strategies', '*', conditions,
           1,
@@ -66,41 +49,6 @@ router.get('/index', async (req, res) => {
         );
        orderBy = {'column':'id','ascending':false};
       // 获取三个月前的日期
-<<<<<<< HEAD
-      const threeMonthsAgo = moment().subtract(3, 'months').format('YYYY-MM-DD HH:mm:ss');
-      console.log("threeMonthsAgo:",threeMonthsAgo);
-      // 复制conditions数组以避免影响其他查询
-      const tradeConditions = [...conditions];
-    
-      // 添加entry_date为三个月以内的条件
-      tradeConditions.push({ type: 'gte', column: 'entry_date', value: threeMonthsAgo });
-        console.log("tradeConditions:",tradeConditions)
-      let trades=null
-      try{
-      trades= await select('view_trader_trade', '*', tradeConditions,
-          null,
-            null, orderBy
-        );
-      }
-      catch(error){
-        console.error('Failed to fetch trades:', error);
-      }
-      console.log("trades:",trades)
-      // 确保 trades 是数组
-      if (!trades) {
-        trades = [];
-      }
-=======
-      const threeMonthsAgo = moment().subtract(3, 'months').toDate();
-      // 复制conditions数组以避免影响其他查询
-      const tradeConditions = [...conditions];
-      // 添加entry_date为三个月以内的条件
-      tradeConditions.push({ type: 'gte', column: 'entry_date', value: threeMonthsAgo });
-      let trades= await select('view_trader_trade', '*', tradeConditions,
-          null,
-            null, orderBy
-        );
->>>>>>> 46e3aca09df426db1c4ec7826d0d2d5426c174d5
        
       // 调试：检查 is_important 字段是否存在
       if (trades && trades.length > 0) {
@@ -160,20 +108,10 @@ router.get('/index', async (req, res) => {
           allList.forEach((item)=>{
             Total+=parseFloat(item.Amount/item.exchange_rate)
           })
-<<<<<<< HEAD
-        users[0].total_trades = (users[0].total_trades || 0) + trades.length;
-=======
-        users[0].total_trades+=trades.length
->>>>>>> 46e3aca09df426db1c4ec7826d0d2d5426c174d5
       res.status(200).json({ 
         success: true, 
         data:{
           trader_profiles: users[0],
-<<<<<<< HEAD
-          strategy_info: strategy_info && strategy_info.length > 0 ? strategy_info[0] : null,
-=======
-          strategy_info:strategy_info[0],
->>>>>>> 46e3aca09df426db1c4ec7826d0d2d5426c174d5
           trades:trades,
           Monthly:Monthly.toFixed(2),
           Total:Total.toFixed(2),

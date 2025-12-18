@@ -72,11 +72,6 @@ router.get('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
 // 创建新的视频数据
 router.post('/', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
-<<<<<<< HEAD
-    const { title, description, video_url, last_update } = req.body;
-=======
-    const { title, description, video_url } = req.body;
->>>>>>> 46e3aca09df426db1c4ec7826d0d2d5426c174d5
     
     // 输入验证
     if (!title || !video_url) {
@@ -90,11 +85,6 @@ router.post('/', authenticateUser, authorizeAdmin, async (req, res) => {
       title,
       description,
       video_url,
-<<<<<<< HEAD
-      last_update: last_update || new Date(),
-=======
-      last_update: new Date(),
->>>>>>> 46e3aca09df426db1c4ec7826d0d2d5426c174d5
       trader_uuid: user && user.trader_uuid ? user.trader_uuid : null,
       ispublic: 1 // 默认公开
     });
@@ -110,11 +100,6 @@ router.post('/', authenticateUser, authorizeAdmin, async (req, res) => {
 router.put('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
       const { id } = req.params;
-<<<<<<< HEAD
-      const { title, description, video_url, ispublic, last_update } = req.body;
-=======
-      const { title, description, video_url, ispublic } = req.body;
->>>>>>> 46e3aca09df426db1c4ec7826d0d2d5426c174d5
       // id是整数类型
       
       // 检查数据是否存在
@@ -131,22 +116,11 @@ router.put('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
       return res.status(403).json({ success: false, error: '没有权限更新此视频' });
     }
     
-<<<<<<< HEAD
-    const updateData = {};
-=======
-    const updateData = {
-      last_update: new Date()
-    };
->>>>>>> 46e3aca09df426db1c4ec7826d0d2d5426c174d5
     
     if (title !== undefined) updateData.title = title;
     if (description !== undefined) updateData.description = description;
     if (video_url !== undefined) updateData.video_url = video_url;
     if (ispublic !== undefined) updateData.ispublic = ispublic;
-<<<<<<< HEAD
-    if (last_update !== undefined) updateData.last_update = last_update;
-=======
->>>>>>> 46e3aca09df426db1c4ec7826d0d2d5426c174d5
     
     const updatedVideo = await update('videos', updateData, [
             { type: 'eq', column: 'id', value: id }

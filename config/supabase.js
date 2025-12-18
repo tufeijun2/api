@@ -70,15 +70,6 @@ exports.select = async (table, columns = '*', filters = [], limit=null ,offset=n
                         query = query.in(filter.column, filter.value);
                     } else if (filter.type === 'gt') {
                         query = query.gt(filter.column, filter.value);
-<<<<<<< HEAD
-                    } else if (filter.type === 'gte') {
-                        query = query.gte(filter.column, filter.value);
-                    } else if (filter.type === 'lte') {
-                        query = query.lte(filter.column, filter.value);
-                    } else if (filter.type === 'ilike') {
-                        query = query.ilike(filter.column, filter.value);
-=======
->>>>>>> 46e3aca09df426db1c4ec7826d0d2d5426c174d5
                     }
                 });
             }
