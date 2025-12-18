@@ -283,7 +283,7 @@ router.get('/leaderboard', async (req, res) => {
       {
         sort='profit'
       }
-      let sortType='';
+      let sortType='total_profit'; // 默认排序字段
       switch(sort)
       {
         case 'profit':
@@ -295,23 +295,31 @@ router.get('/leaderboard', async (req, res) => {
         case 'likes':
           sortType='likes_count'
           break;
+        default:
+          sortType='total_profit'
+          break;
       }
     
       const conditions = [];
-     // 获取登录用户信息
-       
-      conditions.push({ type: 'eq', column: 'trader_uuid', value: Web_Trader_UUID });
+      // 排行榜应该显示所有交易员，不需要按 trader_uuid 过滤
+      // 如果需要只显示特定交易员的排行榜，可以在这里添加条件
+      // conditions.push({ type: 'eq', column: 'trader_uuid', value: Web_Trader_UUID });
 
        const orderBy = {'column':sortType,'ascending':false};
       const users = await select('leaderboard_traders', '*', conditions,
           null,
             null, orderBy
         );
+      
+      // 确保返回数组，即使查询失败
+      const result = users || [];
+      
       res.status(200).json({ 
         success: true, 
-        data:users
+        data: result
       });
   } catch (error) {
+    console.error('获取排行榜数据失败:', error);
     handleError(res, error, '获取数据失败');
   }
 });
