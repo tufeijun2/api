@@ -224,29 +224,44 @@ router.put('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
 router.delete('/:id', authenticateUser, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-     // 获取登录用户信息
+    // 获取登录用户信息
     const user = await getUserFromSession(req);
-    // 检查交易记录是否存在
-    const existingTrades = await select('trades', '*', [
+    
+    // 构建查询条件：先检查记录是否存在
+    const checkConditions = [
       { 'type': 'eq', 'column': 'id', 'value': id },
-      { type: 'eq', column: 'trader_uuid', value: user.trader_uuid }
-    ]);
+      { type: 'eq', column: 'isdel', value: false }
+    ];
+    
+    // 如果不是超级管理员，只能查看和删除自己 trader_uuid 的记录
+    if (user.role !== 'superadmin') {
+      checkConditions.push({ type: 'eq', column: 'trader_uuid', value: user.trader_uuid });
+    }
+    
+    // 检查交易记录是否存在
+    const existingTrades = await select('trades', '*', checkConditions);
     
     if (!existingTrades || existingTrades.length === 0) {
-      return res.status(404).json({ success: false, error: '交易记录不存在' });
+      return res.status(404).json({ success: false, error: '交易记录不存在或没有权限删除' });
     }
     
-   
+    // 构建删除条件
+    const deleteConditions = [
+      { 'type': 'eq', 'column': 'id', 'value': id }
+    ];
     
+    // 如果不是超级管理员，只能删除自己 trader_uuid 的记录
     if (user.role !== 'superadmin') {
-            conditions.push({ type: 'eq', column: 'trader_uuid', value: user.trader_uuid });
+      deleteConditions.push({ type: 'eq', column: 'trader_uuid', value: user.trader_uuid });
     }
     
-    // 删除交易记录
-    await update('trades', { isdel: true }, [
-      { 'type': 'eq', 'column': 'id', 'value': id },
-      { type: 'eq', column: 'trader_uuid', value: user.trader_uuid }
-    ]);
+    // 删除交易记录（软删除：设置 isdel = true）
+    const updatedData = await update('trades', { isdel: true }, deleteConditions);
+    
+    // 检查是否真的更新了记录
+    if (!updatedData || updatedData.length === 0) {
+      return res.status(404).json({ success: false, error: '删除失败：未找到匹配的记录' });
+    }
     
     res.status(200).json({ success: true, message: '交易记录删除成功' });
   } catch (error) {
